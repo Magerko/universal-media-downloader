@@ -3,6 +3,7 @@ import os
 import subprocess
 import logging
 import json
+import platform
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLineEdit, QPushButton, QProgressBar, QLabel,
                              QFileDialog, QMessageBox, QComboBox,
@@ -50,19 +51,47 @@ class MainWindow(QMainWindow):
         project_root = os.path.dirname(os.path.abspath(__file__))
         ffmpeg_folder = os.path.join(project_root, '..', 'assets', 'ffmpeg', 'bin')
         ffmpeg_executable = os.path.join(ffmpeg_folder, 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg')
-        if not os.path.exists(ffmpeg_executable):
-            QMessageBox.critical(self,
-                                 self.translator.translate('error'),
-                                 f"{self.translator.translate('ffmpeg_not_found')}: {ffmpeg_executable}")
-            sys.exit(1)
-        try:
-            subprocess.run([ffmpeg_executable, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            return ffmpeg_executable
-        except Exception as e:
-            QMessageBox.critical(self,
-                                 self.translator.translate('error'),
-                                 f"{self.translator.translate('ffmpeg_run_error')}\n{str(e)}")
-            sys.exit(1)
+        
+        # For Linux and macOS, try local ffmpeg first, then system
+        system = platform.system()
+        if system in ('Linux', 'Darwin'):  # Darwin is macOS
+            if os.path.exists(ffmpeg_executable):
+                try:
+                    subprocess.run([ffmpeg_executable, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                    return ffmpeg_executable
+                except Exception:
+                    pass  # Fall through to system ffmpeg
+            
+            # Try to find ffmpeg in system PATH
+            try:
+                result = subprocess.run(['which', 'ffmpeg'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+                system_ffmpeg = result.stdout.strip()
+                if system_ffmpeg:
+                    subprocess.run([system_ffmpeg, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                    return system_ffmpeg
+            except Exception:
+                pass  # Continue to error handling
+        else:
+            # For Windows, only check the bundled ffmpeg
+            if not os.path.exists(ffmpeg_executable):
+                QMessageBox.critical(self,
+                                     self.translator.translate('error'),
+                                     f"{self.translator.translate('ffmpeg_not_found')}: {ffmpeg_executable}")
+                sys.exit(1)
+            try:
+                subprocess.run([ffmpeg_executable, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                return ffmpeg_executable
+            except Exception as e:
+                QMessageBox.critical(self,
+                                     self.translator.translate('error'),
+                                     f"{self.translator.translate('ffmpeg_run_error')}\n{str(e)}")
+                sys.exit(1)
+        
+        # If we reach here, ffmpeg was not found on Linux/macOS
+        QMessageBox.critical(self,
+                             self.translator.translate('error'),
+                             f"{self.translator.translate('ffmpeg_not_found')}: {ffmpeg_executable}")
+        sys.exit(1)
 
     def initUI(self):
         self.setObjectName('MainWindow')

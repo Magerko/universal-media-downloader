@@ -1,0 +1,12 @@
+[project]
+name = "universal-media-downloader"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "packaging>=25.0",
+    "pyqt6>=6.10.2",
+    "requests>=2.32.5",
+    "yt-dlp[curl-cffi]>=2025.12.8",
+]
