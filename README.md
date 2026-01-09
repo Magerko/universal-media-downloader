@@ -54,7 +54,7 @@ curl -fsSL https://deno.land/install.sh | sh
 
 FFmpeg используется для объединения видео и аудио потоков, конвертации форматов и извлечения аудио.
 
-**Вариант 1:** Приложение уже содержит FFmpeg в папке `assets/ffmpeg/`
+**Вариант 1:** Вручную закинуть бинарник в  `assets/ffmpeg/bin/`
 
 **Вариант 2:** Установить системно:
 
@@ -73,22 +73,48 @@ brew install ffmpeg
 ```bash
 sudo apt install ffmpeg  # Debian/Ubuntu
 sudo dnf install ffmpeg  # Fedora
+sudo pacman -S ffmpeg # Arch-based distro (Arch Linux, ChachyOS, EndeavourOS ...)
 ```
 
 ## Установка
 
 1. **Клонируйте репозиторий:**
 ```bash
-git clone https://github.com/YOUR_USERNAME/universal-media-downloader.git
+git clone https://github.com/Magerko/universal-media-downloader.git
 cd universal-media-downloader
 ```
 
-2. **Создайте виртуальное окружение:**
+### Запуск
+
+**Вариант 1:** 
+
+1. **Установите пакетный менеджер для Python `uv` с оффициального сайта (`https://docs.astral.sh/uv/#installation`)**
+
+Windows:
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Linux/MacOS
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+2.**Запустите приложение**
+```bash
+uv run main.py
+```
+
+**Вариант 2:**
+
+1. **Создайте виртуальное окружение:**
 ```bash
 python -m venv .venv
 ```
 
-3. **Активируйте виртуальное окружение:**
+2. **Активируйте виртуальное окружение:**
 
 Windows:
 ```bash
@@ -100,12 +126,12 @@ macOS/Linux:
 source .venv/bin/activate
 ```
 
-4. **Установите зависимости:**
+3. **Установите зависимости:**
 ```bash
 pip install -r requirements.txt
 ```
 
-5. **Запустите приложение:**
+4. **Запустите приложение:**
 ```bash
 python main.py
 ```
