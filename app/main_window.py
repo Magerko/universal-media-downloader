@@ -129,9 +129,9 @@ class MainWindow(QMainWindow):
 
         self.language_combo = QComboBox()
         self.language_combo.setObjectName('LanguageCombo')
-        self.language_combo.addItems(['English', 'Русский', 'Українська'])
+        self.language_combo.addItems(['English', 'Русский', 'Українська', 'Français'])
         saved_language = self.settings.value('language', 'ru')
-        language_map = {'en': 0, 'ru': 1, 'uk': 2}
+        language_map = {'en': 0, 'ru': 1, 'uk': 2, 'fr': 3}
         self.language_combo.setCurrentIndex(language_map.get(saved_language, 1))
         nav_layout.addWidget(self.language_combo)
 
@@ -372,13 +372,14 @@ class MainWindow(QMainWindow):
         self.language_combo.setItemText(0, 'English')
         self.language_combo.setItemText(1, 'Русский')
         self.language_combo.setItemText(2, 'Українська')
+        self.language_combo.setItemText(3, 'Français')
         self.language_combo.blockSignals(False)
         self.settings_page.update_translations()
         self.history_page.update_translations()
         self.about_page.update_translations()
 
     def on_language_change(self, index):
-        language_map = {0: 'en', 1: 'ru', 2: 'uk'}
+        language_map = {0: 'en', 1: 'ru', 2: 'uk', 3: 'fr'}
         selected_lang = language_map.get(index, 'ru')
         self.translator.set_language(selected_lang)
         self.settings.setValue('language', selected_lang)
