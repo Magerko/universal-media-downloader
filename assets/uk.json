@@ -98,5 +98,10 @@
   "remove_from_history": "Видалити з історії",
   "confirm": "Підтвердження",
   "clear_history_confirm": "Ви впевнені, що хочете очистити всю історію?",
-  "history_stats": "Всього: {total} | Завершено: {completed} | Помилки: {errors}"
+  "history_stats": "Всього: {total} | Завершено: {completed} | Помилки: {errors}",
+  "status_finalizing": "Завершення...",
+  "status_removing_audio_copy": "Видалення аудіо (копіювання)...",
+  "status_reencoding_video": "Перекодування відео...",
+  "status_processing_audio": "Обробка відео (видалення звуку)..."
 }
+  

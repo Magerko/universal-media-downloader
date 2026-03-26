@@ -129,14 +129,15 @@ class MainWindow(QMainWindow):
 
         self.language_combo = QComboBox()
         self.language_combo.setObjectName('LanguageCombo')
-        self.language_combo.addItems(['English', 'Русский', 'Українська'])
-        saved_language = self.settings.value('language', 'ru')
-        language_map = {'en': 0, 'ru': 1, 'uk': 2}
-        self.language_combo.setCurrentIndex(language_map.get(saved_language, 1))
+        self.language_combo.addItems(['English', 'Русский', 'Українська', 'Español'])
+        saved_language = self.settings.value('language', 'en')
+        language_map = {'en': 0, 'ru': 1, 'uk': 2, 'es': 3}
+        self.language_combo.setCurrentIndex(language_map.get(saved_language, 0))
         nav_layout.addWidget(self.language_combo)
 
         self.quick_theme_combo = QComboBox()
-        self.quick_theme_combo.addItems(['Dark', 'Light'])
+        self.quick_theme_combo.addItem(self.translator.translate('theme_dark', 'Dark'), 'dark')
+        self.quick_theme_combo.addItem(self.translator.translate('theme_light', 'Light'), 'light')
         theme = self.settings.value('theme', 'dark')
         self.quick_theme_combo.setCurrentIndex(0 if theme == 'dark' else 1)
         nav_layout.addWidget(self.quick_theme_combo)
@@ -309,6 +310,11 @@ class MainWindow(QMainWindow):
         bottom_bar_layout.addWidget(self.status_label)
         main_layout.addWidget(bottom_bar)
 
+    def _sync_theme_from_settings(self, idx):
+        self.quick_theme_combo.blockSignals(True)
+        self.quick_theme_combo.setCurrentIndex(idx)
+        self.quick_theme_combo.blockSignals(False)
+
     def connect_signals(self):
         self.btn_add.clicked.connect(self.on_add_link)
         self.url_input.returnPressed.connect(self.on_add_link)
@@ -325,7 +331,7 @@ class MainWindow(QMainWindow):
         self.btn_history.clicked.connect(lambda: self.page_stack.setCurrentIndex(1))
         self.btn_settings.clicked.connect(lambda: self.page_stack.setCurrentIndex(2))
         self.btn_about.clicked.connect(lambda: self.page_stack.setCurrentIndex(3))
-
+        self.settings_page.theme_combo.currentIndexChanged.connect(self._sync_theme_from_settings)
         # History re-download signal
         self.history_page.redownload_requested.connect(self._redownload_from_history)
         self.btn_open_save.clicked.connect(self.open_save_folder)
@@ -372,14 +378,15 @@ class MainWindow(QMainWindow):
         self.language_combo.setItemText(0, 'English')
         self.language_combo.setItemText(1, 'Русский')
         self.language_combo.setItemText(2, 'Українська')
+        self.language_combo.setItemText(3, 'Español')
         self.language_combo.blockSignals(False)
         self.settings_page.update_translations()
         self.history_page.update_translations()
         self.about_page.update_translations()
 
     def on_language_change(self, index):
-        language_map = {0: 'en', 1: 'ru', 2: 'uk'}
-        selected_lang = language_map.get(index, 'ru')
+        language_map = {0: 'en', 1: 'ru', 2: 'uk', 3: 'es'}
+        selected_lang = language_map.get(index, 'es')
         self.translator.set_language(selected_lang)
         self.settings.setValue('language', selected_lang)
         self.settings.sync()
@@ -390,6 +397,9 @@ class MainWindow(QMainWindow):
         self.settings.setValue('theme', theme)
         self.settings.sync()
         ThemeManager(self.settings).apply_theme()
+        self.settings_page.theme_combo.blockSignals(True)
+        self.settings_page.theme_combo.setCurrentIndex(idx)
+        self.settings_page.theme_combo.blockSignals(False)
 
     def on_add_link(self):
         url = self.url_input.text().strip()

@@ -98,5 +98,9 @@
   "remove_from_history": "Remove from history",
   "confirm": "Confirm",
   "clear_history_confirm": "Are you sure you want to clear all history?",
-  "history_stats": "Total: {total} | Completed: {completed} | Errors: {errors}"
+  "history_stats": "Total: {total} | Completed: {completed} | Errors: {errors}",
+  "status_finalizing": "Finalizing...",
+  "status_removing_audio_copy": "Removing audio (copy mode)...",
+  "status_reencoding_video": "Re-encoding video...",
+  "status_processing_audio": "Processing video (removing audio)..."
 }

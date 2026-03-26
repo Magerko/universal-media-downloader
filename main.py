@@ -41,14 +41,14 @@ def main():
         settings = QSettings('Magerko', 'UniversalMediaDownloader')
 
         translator = Translator(project_root=project_root)
-        saved_language = settings.value('language', 'ru')
+        saved_language = settings.value('language', 'en')
         translator.set_language(saved_language)
 
         icon_path = os.path.join(project_root, 'assets', 'icon.png')
         if os.path.exists(icon_path):
             app.setWindowIcon(QIcon(icon_path))
         else:
-            logger.warning(f'Иконка не найдена по пути: {icon_path}')
+            logger.warning(f'Image not found in root: {icon_path}')
 
         window = MainWindow(translator, settings)
 
@@ -58,9 +58,8 @@ def main():
         window.show()
 
         sys.exit(app.exec())
-
     except Exception as e:
-        logger.exception('Произошла фатальная ошибка при запуске приложения.')
+        logger.exception('Fatal error on execution.')
         traceback.print_exc()
 
 

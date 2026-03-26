@@ -192,7 +192,7 @@ class DownloadWorker(QRunnable):
                 self.task.update_progress(percent, progress_text)
         elif d['status'] == 'finished':
             self.task.set_status(self.task.Status.PROCESSING)
-            self.task.update_progress(90, "Processing...")
+            self.task.update_progress(90, self.translator.translate('status_processing', 'Processing...'))
             final_path = d.get('filename')
             if final_path:
                 self.task.update_current_paths(filename=final_path)
@@ -203,9 +203,9 @@ class DownloadWorker(QRunnable):
         status = d.get('status')
         pp_name = d.get('postprocessor', '')
         if status == 'started':
-            self.task.update_progress(92, f"Processing: {pp_name}...")
+            self.task.update_progress(92, f"{self.translator.translate('status_processing', 'Processing')}: {pp_name}...")
         elif status == 'finished':
-            self.task.update_progress(98, "Finalizing...")
+            self.task.update_progress(98, self.translator.translate('status_finalizing', 'Finalizing...'))
 
     def _default_save_path(self):
         root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -250,8 +250,7 @@ class DownloadWorker(QRunnable):
                                    creationflags=creation_flags)
 
         # Обновляем прогресс во время обработки
-        self.task.update_progress(99, "Removing audio (copy mode)...")
-
+        self.task.update_progress(99, self.translator.translate('status_removing_audio_copy', 'Removing audio (copy mode)...'))
         # Ждем завершения с периодической проверкой отмены
         while process.poll() is None:
             if self.task.is_stop_requested() or self._cancel_requested:
@@ -279,7 +278,7 @@ class DownloadWorker(QRunnable):
                                    creationflags=creation_flags)
 
         # Обновляем прогресс во время обработки
-        self.task.update_progress(99, "Re-encoding video...")
+        self.task.update_progress(99, self.translator.translate('status_reencoding_video', 'Re-encoding video...'))
 
         # Ждем завершения с периодической проверкой отмены
         while process.poll() is None:
@@ -364,7 +363,7 @@ class DownloadWorker(QRunnable):
                 }]
             if self.settings.value('subtitles_enabled', False, type=bool):
                 ydl_opts['writesubtitles'] = True
-                ydl_opts['subtitleslangs'] = ['en', 'ru', 'uk']
+                ydl_opts['subtitleslangs'] = ['en', 'ru', 'uk', 'es']
             use_cookies = self.settings.value('use_cookies', False, type=bool)
             if use_cookies:
                 source_type = self.settings.value('cookie_source_type', 'file')
@@ -390,7 +389,7 @@ class DownloadWorker(QRunnable):
                 ydl.download([self.task.url])
                 if video_only_mode:
                     try:
-                        self.task.update_progress(98, "Processing video (removing audio)...")
+                        self.task.update_progress(98, self.translator.translate('status_processing_audio', 'Processing video (removing audio)...'))
                         self._force_video_only(final_filepath)
                     except Exception as e:
                         logger.error(f"Strip-audio failed for {self.task.url}: {e}")

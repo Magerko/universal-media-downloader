@@ -127,8 +127,10 @@ class SettingsTab(QWidget):
         form_layout = QFormLayout(group_box)
 
         self.theme_combo = QComboBox()
-        self.theme_combo.addItem('Dark', userData='dark')
-        self.theme_combo.addItem('Light', userData='light')
+        self.theme_combo.addItem(self.translator.translate('theme_dark', 'Dark'), 'dark')
+        self.theme_combo.addItem(self.translator.translate('theme_light', 'Light'), 'light')
+        theme = self.settings.value('theme', 'dark')
+        self.theme_combo.setCurrentIndex(0 if theme == 'dark' else 1)
         self.theme_label = QLabel()
         self.theme_label.setProperty("text_key", "select_theme")
         form_layout.addRow(self.theme_label, self.theme_combo)
@@ -408,6 +410,10 @@ class SettingsTab(QWidget):
 
         if self.sender() == self.theme_combo:
             ThemeManager(self.settings).apply_theme()
+            idx = self.theme_combo.currentIndex()
+            self.parent_window.quick_theme_combo.blockSignals(True)
+            self.parent_window.quick_theme_combo.setCurrentIndex(idx)
+            self.parent_window.quick_theme_combo.blockSignals(False)
 
     def update_cookie_widgets_state(self):
         use_cookies = self.cookies_checkbox.isChecked()
