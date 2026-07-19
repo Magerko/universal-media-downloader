@@ -19,6 +19,7 @@ from .translation import Translator
 from .theme_manager import ThemeManager
 from .flow_layout import FlowLayout
 from .update_checker import UpdateChecker
+from . import paths
 
 logger = logging.getLogger(__name__)
 
@@ -47,22 +48,37 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(1000, self._startup_checks)
 
     def check_ffmpeg(self):
-        project_root = os.path.dirname(os.path.abspath(__file__))
-        ffmpeg_folder = os.path.join(project_root, '..', 'assets', 'ffmpeg', 'bin')
-        ffmpeg_executable = os.path.join(ffmpeg_folder, 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg')
-        if not os.path.exists(ffmpeg_executable):
-            QMessageBox.critical(self,
-                                 self.translator.translate('error'),
-                                 f"{self.translator.translate('ffmpeg_not_found')}: {ffmpeg_executable}")
-            sys.exit(1)
-        try:
-            subprocess.run([ffmpeg_executable, '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-            return ffmpeg_executable
-        except Exception as e:
-            QMessageBox.critical(self,
-                                 self.translator.translate('error'),
-                                 f"{self.translator.translate('ffmpeg_run_error')}\n{str(e)}")
-            sys.exit(1)
+        """Locate ffmpeg, but never refuse to start without it.
+
+        Plenty of downloads need no ffmpeg at all; only merging separate video
+        and audio streams and converting to mp3 do. Exiting here meant anyone
+        who cloned the repository - where the ffmpeg folder is not present -
+        got a dialog and nothing else.
+        """
+        executable = paths.ffmpeg_path()
+
+        if executable:
+            try:
+                subprocess.run([executable, '-version'],
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               check=True, timeout=15, **paths.subprocess_kwargs())
+                logger.info(f'ffmpeg found: {executable}')
+                return executable
+            except Exception as e:
+                logger.warning(f'ffmpeg found at {executable} but will not run: {e}')
+
+        logger.warning('ffmpeg not available - merging and mp3 conversion are disabled')
+        QMessageBox.warning(
+            self,
+            self.translator.translate('warning', 'Warning'),
+            self.translator.translate(
+                'ffmpeg_missing_warning',
+                'FFmpeg was not found.\n\n'
+                'The app will still download, but merging high-quality video with '
+                'audio and converting to MP3 will not work.\n\n'
+                'Install ffmpeg and make sure it is on your PATH, or use the '
+                'release build, which already includes it.'))
+        return None
 
     def initUI(self):
         self.setObjectName('MainWindow')
@@ -161,7 +177,7 @@ class MainWindow(QMainWindow):
         title_row.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.rocket_label = QLabel()
         self.rocket_label.setObjectName('RocketEmoji')
-        rocket_gif = os.path.join(os.path.dirname(__file__), '..', 'assets', 'animations', 'rocket.gif')
+        rocket_gif = paths.resource_path('assets', 'animations', 'rocket.gif')
         if os.path.exists(rocket_gif):
             self.rocket_movie = QMovie(rocket_gif)
             self.rocket_label.setMovie(self.rocket_movie)
@@ -264,7 +280,7 @@ class MainWindow(QMainWindow):
         bottom_bar_layout = QHBoxLayout(bottom_bar)
         bottom_bar_layout.setContentsMargins(15, 5, 15, 5)
 
-        icon_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'icons')
+        icon_path = paths.resource_path('assets', 'icons')
         self.download_button = QPushButton(self.translator.translate('download_all'))
         self.download_button.setIcon(QIcon(os.path.join(icon_path, 'download.svg')))
         self.download_button.setObjectName('ActionButton')
@@ -492,15 +508,11 @@ class MainWindow(QMainWindow):
     def open_save_folder(self):
         folder = self.settings.value('save_path', '')
         if not folder or not os.path.isdir(folder):
-            folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            folder = paths.default_download_dir()
         self._open_path(folder)
 
     def open_logs_folder(self):
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        folder = os.path.join(project_root, 'logs')
-        if not os.path.isdir(folder):
-            os.makedirs(folder, exist_ok=True)
-        self._open_path(folder)
+        self._open_path(paths.logs_dir())
 
     def _open_path(self, path):
         if sys.platform.startswith('win'):

@@ -8,11 +8,14 @@ from PyQt6.QtCore import QSettings
 from app.main_window import MainWindow
 from app.translation import Translator
 from app.theme_manager import ThemeManager
+from app import paths
 
 
 def setup_logging():
-    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
-    os.makedirs(log_dir, exist_ok=True)
+    # Must not write beside the executable: in a frozen build that is a
+    # temporary folder, and under Program Files it raises PermissionError -
+    # here, before QApplication exists, so the user would see nothing at all.
+    log_dir = paths.logs_dir()
     log_file = os.path.join(log_dir, 'app.log')
     logging.basicConfig(
         filename=log_file,
@@ -35,16 +38,15 @@ def main():
     logger = logging.getLogger(__name__)
 
     try:
-        project_root = os.path.dirname(os.path.abspath(__file__))
         app = QApplication(sys.argv)
 
         settings = QSettings('Magerko', 'UniversalMediaDownloader')
 
-        translator = Translator(project_root=project_root)
+        translator = Translator()
         saved_language = settings.value('language', 'ru')
         translator.set_language(saved_language)
 
-        icon_path = os.path.join(project_root, 'assets', 'icon.png')
+        icon_path = paths.resource_path('assets', 'icon.png')
         if os.path.exists(icon_path):
             app.setWindowIcon(QIcon(icon_path))
         else:
@@ -59,9 +61,12 @@ def main():
 
         sys.exit(app.exec())
 
-    except Exception as e:
+    except Exception:
         logger.exception('Произошла фатальная ошибка при запуске приложения.')
         traceback.print_exc()
+        # Without this the process reported success after failing to start,
+        # which hides the crash from anything that checks the exit code.
+        sys.exit(1)
 
 
 if __name__ == '__main__':

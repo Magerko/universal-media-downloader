@@ -13,6 +13,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from .paths import default_download_dir
+
 logger = logging.getLogger(__name__)
 
 # Global HTTP session with connection pooling and retries
@@ -208,10 +210,10 @@ class DownloadWorker(QRunnable):
             self.task.update_progress(98, "Finalizing...")
 
     def _default_save_path(self):
-        root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        dl_dir = os.path.join(root, 'downloads')
-        os.makedirs(dl_dir, exist_ok=True)
-        return dl_dir
+        # Used to be a "downloads" folder beside the code, which lands inside a
+        # temporary directory in a frozen build and is unwritable under
+        # Program Files.
+        return default_download_dir()
 
     def _cleanup_incomplete(self, save_path):
         try:
@@ -239,14 +241,26 @@ class DownloadWorker(QRunnable):
         except Exception:
             pass
 
+    def _require_ffmpeg(self):
+        if not self.ffmpeg_path:
+            raise RuntimeError(
+                'This download needs FFmpeg, which was not found. Install it and '
+                'put it on your PATH, or use the release build that bundles it.')
+
     def _strip_audio_copy(self, in_path, out_path):
+        self._require_ffmpeg()
         cmd = [
             self.ffmpeg_path, '-y', '-i', in_path,
             '-map', '0:v', '-c:v', 'copy', '-an', out_path
         ]
-        # Понижаем приоритет процесса на Windows для предотвращения лагов
-        creation_flags = 0x00004000 if sys.platform == 'win32' else 0  # BELOW_NORMAL_PRIORITY_CLASS
+        # Понижаем приоритет процесса на Windows для предотвращения лагов.
+        # CREATE_NO_WINDOW нужен отдельно: без него в оконной сборке на каждый
+        # вызов ffmpeg мигает консоль.
+        creation_flags = 0
+        if sys.platform == 'win32':
+            creation_flags = 0x00004000 | subprocess.CREATE_NO_WINDOW  # BELOW_NORMAL_PRIORITY_CLASS
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   stdin=subprocess.DEVNULL,
                                    creationflags=creation_flags)
 
         # Обновляем прогресс во время обработки
@@ -268,14 +282,20 @@ class DownloadWorker(QRunnable):
             raise subprocess.CalledProcessError(process.returncode, cmd, stdout, stderr)
 
     def _strip_audio_reencode(self, in_path, out_path):
+        self._require_ffmpeg()
         cmd = [
             self.ffmpeg_path, '-y', '-i', in_path,
             '-map', '0:v', '-c:v', 'libx264', '-crf', '18', '-preset', 'veryfast',
             '-movflags', '+faststart', '-an', out_path
         ]
-        # Понижаем приоритет процесса на Windows для предотвращения лагов
-        creation_flags = 0x00004000 if sys.platform == 'win32' else 0  # BELOW_NORMAL_PRIORITY_CLASS
+        # Понижаем приоритет процесса на Windows для предотвращения лагов.
+        # CREATE_NO_WINDOW нужен отдельно: без него в оконной сборке на каждый
+        # вызов ffmpeg мигает консоль.
+        creation_flags = 0
+        if sys.platform == 'win32':
+            creation_flags = 0x00004000 | subprocess.CREATE_NO_WINDOW  # BELOW_NORMAL_PRIORITY_CLASS
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   stdin=subprocess.DEVNULL,
                                    creationflags=creation_flags)
 
         # Обновляем прогресс во время обработки
@@ -335,7 +355,6 @@ class DownloadWorker(QRunnable):
                 'noprogress': False,
                 'ignoreerrors': False,
                 'nocheckcertificate': True,
-                'ffmpeg_location': self.ffmpeg_path,
                 'socket_timeout': 30,
                 'retries': 10,
                 'fragment_retries': 3,
@@ -343,6 +362,12 @@ class DownloadWorker(QRunnable):
                 'enable_js': True,
                 'remote_components': {'ejs:github': True},
             }
+            # Only pass ffmpeg_location when we actually have one: handing
+            # yt-dlp a None makes it treat "None" as a path instead of falling
+            # back to its own discovery.
+            if self.ffmpeg_path:
+                ydl_opts['ffmpeg_location'] = self.ffmpeg_path
+
             video_only_mode = chosen_format == 'video_only_stripped'
             if video_only_mode:
                 ydl_opts['format'] = 'bestvideo[ext=mp4]/bestvideo/best'
