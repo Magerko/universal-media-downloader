@@ -223,13 +223,13 @@ class MainWindow(QMainWindow):
         qa_layout.setContentsMargins(0, 10, 0, 0)
         qa_layout.setSpacing(8)
         self.btn_paste = QPushButton(QIcon(paths.icon_path('link', theme)),
-                                     ' ' + self.translator.translate('paste_from_clipboard', 'Paste'))
+                                     self.translator.translate('paste_from_clipboard', 'Paste'))
         self.btn_paste.setObjectName('SecondaryButton')
         self.btn_import = QPushButton(QIcon(paths.icon_path('folder', theme)),
-                                      ' ' + self.translator.translate('load_from_file'))
+                                      self.translator.translate('load_from_file'))
         self.btn_import.setObjectName('SecondaryButton')
         self.btn_quality = QPushButton(QIcon(paths.icon_path('settings', theme)),
-                                       ' ' + self.translator.translate('open_quality_settings', 'Quality settings'))
+                                       self.translator.translate('open_quality_settings', 'Quality settings'))
         self.btn_quality.setObjectName('SecondaryButton')
         qa_layout.addWidget(self.btn_paste)
         qa_layout.addWidget(self.btn_import)
@@ -387,9 +387,9 @@ class MainWindow(QMainWindow):
         self.empty_b3.setText(
             '• ' + self.translator.translate('empty_tip_support', 'Supported: YouTube, TikTok, Instagram, VK, RuTube…'))
         # Только текст: иконки заданы при создании и от языка не зависят.
-        self.btn_paste.setText(' ' + self.translator.translate('paste_from_clipboard', 'Paste'))
-        self.btn_import.setText(' ' + self.translator.translate('load_from_file'))
-        self.btn_quality.setText(' ' + self.translator.translate('open_quality_settings', 'Quality settings'))
+        self.btn_paste.setText(self.translator.translate('paste_from_clipboard', 'Paste'))
+        self.btn_import.setText(self.translator.translate('load_from_file'))
+        self.btn_quality.setText(self.translator.translate('open_quality_settings', 'Quality settings'))
         self.hint_label.setText(self.translator.translate(
             'empty_hint', 'Нажмите Enter или кнопку «плюс», чтобы добавить'))
         self.btn_open_save.setToolTip(self.translator.translate('open_save_folder'))
