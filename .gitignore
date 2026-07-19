@@ -70,6 +70,16 @@ cookies.txt
 *.manifest
 *.spec
 
+# Build tooling that must be tracked despite the *.exe / *.spec rules above
+!UniversalMediaDownloader.spec
+
+# ffmpeg binaries fetched at build time, never committed
+vendor/
+
+# Packaged output
+installer_output/
+UniversalMediaDownloader-windows-*.zip
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

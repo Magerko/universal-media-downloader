@@ -1,0 +1,109 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: '3.12'
+  FFMPEG_URL: https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller==6.20.0
+
+      - name: Fetch ffmpeg
+        run: |
+          Invoke-WebRequest $env:FFMPEG_URL -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_dl
+          New-Item -ItemType Directory -Force vendor | Out-Null
+          # yt-dlp shells out to ffprobe itself, so both binaries are needed.
+          foreach ($tool in 'ffmpeg.exe', 'ffprobe.exe') {
+            Copy-Item (Get-ChildItem ffmpeg_dl -Recurse -Filter $tool | Select-Object -First 1).FullName "vendor\$tool"
+          }
+          $license = Get-ChildItem ffmpeg_dl -Recurse -Include LICENSE.txt, LICENSE | Select-Object -First 1
+          if ($license) { Copy-Item $license.FullName vendor\FFMPEG-LICENSE.txt }
+
+      - name: Build
+        run: pyinstaller --noconfirm --clean UniversalMediaDownloader.spec
+
+      - name: Verify the build starts and ships working extractors
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          foreach ($f in '_internal\ffmpeg.exe', '_internal\ffprobe.exe', '_internal\assets\ru.json') {
+            if (-not (Test-Path "dist\UniversalMediaDownloader\$f")) { throw "$f missing from the build" }
+          }
+          $proc = Start-Process dist\UniversalMediaDownloader\UniversalMediaDownloader.exe -PassThru
+          Start-Sleep -Seconds 20
+          if ($proc.HasExited) { throw "app exited on startup with code $($proc.ExitCode)" }
+          Stop-Process -Id $proc.Id -Force
+          # yt-dlp loads extractors dynamically; if PyInstaller dropped them the
+          # app still starts and then fails on every single download.
+          python -c "import yt_dlp; n=len(yt_dlp.extractor.gen_extractors()); print('extractors:', n); assert n > 1000, 'extractors missing'"
+
+      - name: Package portable archive
+        run: |
+          if (Test-Path vendor\FFMPEG-LICENSE.txt) {
+            Copy-Item vendor\FFMPEG-LICENSE.txt dist\UniversalMediaDownloader\FFMPEG-LICENSE.txt
+          }
+          Copy-Item LICENSE dist\UniversalMediaDownloader\LICENSE.txt
+          Compress-Archive -Path dist\UniversalMediaDownloader\* -DestinationPath UniversalMediaDownloader-windows-x64.zip
+
+      - name: Build installer
+        run: |
+          $iscc = Get-ChildItem 'C:\Program Files (x86)\Inno Setup 6', 'C:\Program Files\Inno Setup 6' `
+            -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $iscc) {
+            choco install innosetup -y --no-progress
+            $iscc = Get-ChildItem 'C:\Program Files (x86)\Inno Setup 6', 'C:\Program Files\Inno Setup 6' `
+              -Filter ISCC.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $iscc) { throw 'Inno Setup compiler not found' }
+          # Tags look like v1.2.3; Inno wants a bare version number.
+          $version = if ($env:GITHUB_REF_NAME -match '^v(\d+\.\d+\.\d+)$') { $Matches[1] } else { '0.0.0' }
+          & $iscc.FullName "/DAppVersion=$version" installer.iss
+          Get-ChildItem installer_output
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UniversalMediaDownloader-windows-x64
+          path: |
+            UniversalMediaDownloader-windows-x64.zip
+            installer_output/*.exe
+          retention-days: 14
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$env:GITHUB_REF_NAME" `
+            UniversalMediaDownloader-windows-x64.zip (Get-ChildItem installer_output\*.exe).FullName `
+            --title "Universal Media Downloader $env:GITHUB_REF_NAME" `
+            --generate-notes
