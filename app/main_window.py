@@ -18,6 +18,7 @@ from .download_item_widget import DownloadItemWidget
 from .download_manager import DownloadManager
 from .translation import Translator
 from .theme_manager import ThemeManager
+from .trim_dialog import TrimDialog
 from .flow_layout import FlowLayout
 from .update_checker import UpdateChecker
 from . import paths
@@ -481,6 +482,7 @@ class MainWindow(QMainWindow):
         item_widget.open_folder_requested.connect(self.open_save_folder)
         item_widget.copy_link_requested.connect(lambda: QApplication.clipboard().setText(task.url))
         item_widget.start_or_retry_requested.connect(lambda: self.download_manager.start_or_retry_task(task))
+        item_widget.trim_requested.connect(lambda t=task, w=item_widget: self.on_trim_requested(t, w))
 
         # Connect to save history when download completes/fails/stops
         task.status_changed.connect(lambda status, t=task: self._on_task_status_changed(t, status))
@@ -492,6 +494,15 @@ class MainWindow(QMainWindow):
             row = self.downloads_list.row(task.list_item)
             self.downloads_list.takeItem(row)
         self.update_placeholder_visibility()
+
+    def on_trim_requested(self, task, widget):
+        dialog = TrimDialog(self.translator, duration=task.duration,
+                            start=task.clip_start, end=task.clip_end, parent=self)
+        if dialog.exec() != TrimDialog.DialogCode.Accepted:
+            return
+        task.clip_start = dialog.result_start
+        task.clip_end = dialog.result_end
+        widget.update_ui()
 
     def on_playlist_found(self, task, title, urls):
         """Спрашивает, разворачивать ли плейлист в отдельные загрузки.

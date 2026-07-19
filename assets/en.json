@@ -113,5 +113,21 @@
     "playlist_added": "Added {count} videos from the playlist",
     "cancel": "Cancel",
     "playlist_found_in_video": "The link points to a video inside a playlist ({count} videos). What should be downloaded?",
-    "playlist_only_this": "This video only"
+    "playlist_only_this": "This video only",
+    "trim_title": "Trim by time",
+    "trim_hint": "Only the selected part will be downloaded. Time can be written as 7:40, 1:02:15 or a number of seconds. An empty field means from the start or to the end.",
+    "trim_from": "From",
+    "trim_to": "To",
+    "trim_from_start": "from the start",
+    "trim_to_end": "to the end",
+    "trim_duration": "Video length: {duration}",
+    "trim_apply": "Apply",
+    "trim_clear": "Remove trimming",
+    "trim_menu": "Trim by time…",
+    "trim_bad_start": "Could not read the start. Example: 7:40",
+    "trim_bad_end": "Could not read the end. Example: 1:02:15",
+    "end_before_start": "The end must come after the start",
+    "start_after_end_of_video": "The start is beyond the end of the video",
+    "end_after_end_of_video": "The end is beyond the end of the video",
+    "trim_badge": "part {start}–{end}"
 }

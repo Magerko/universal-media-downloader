@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
 from PyQt6.QtGui import QPixmap, QIcon, QAction
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from .download_task import DownloadTask
+from .timecode import format_timecode
 from . import paths
 
 
@@ -21,6 +22,7 @@ class DownloadItemWidget(QWidget):
     open_folder_requested = pyqtSignal()
     copy_link_requested = pyqtSignal()
     start_or_retry_requested = pyqtSignal()
+    trim_requested = pyqtSignal()
 
     def __init__(self, task: DownloadTask, translator):
         super().__init__()
@@ -113,21 +115,27 @@ class DownloadItemWidget(QWidget):
         act_open = QAction(self.translator.translate('open_save_folder'), self)
         act_copy = QAction(self.translator.translate('copy_link'), self)
         act_start = QAction(self.translator.translate('download_this_video'), self)
+        act_trim = QAction(self.translator.translate('trim_menu'), self)
         act_remove = QAction(self.translator.translate('remove_from_list'), self)
 
         act_open.triggered.connect(self.open_folder_requested.emit)
         act_copy.triggered.connect(self.copy_link_requested.emit)
         act_start.triggered.connect(self.start_or_retry_requested.emit)
+        act_trim.triggered.connect(self.trim_requested.emit)
         act_remove.triggered.connect(self.remove_requested.emit)
 
         is_startable = self.task.status in (
             DownloadTask.Status.PENDING, DownloadTask.Status.ERROR, DownloadTask.Status.STOPPED)
         act_start.setEnabled(is_startable)
+        # Границы имеет смысл менять только до начала загрузки: качающееся
+        # видео уже режется по прежним меткам.
+        act_trim.setEnabled(is_startable)
 
         is_completed = self.task.status == DownloadTask.Status.COMPLETED
         act_open.setEnabled(is_completed)
 
         menu.addAction(act_start)
+        menu.addAction(act_trim)
         menu.addAction(act_open)
         menu.addAction(act_copy)
         menu.addSeparator()
@@ -193,8 +201,19 @@ class DownloadItemWidget(QWidget):
         self.progress_bar.setStyleSheet(
             f'QProgressBar::chunk {{ background-color: {colour}; border-radius: 3px; }}')
 
+    def _clip_badge(self):
+        """Подпись о выбранном куске, чтобы обрезка не была невидимой."""
+        if not self.task.has_clip:
+            return ''
+        start = (format_timecode(self.task.clip_start) if self.task.clip_start is not None
+                 else self.translator.translate('trim_from_start'))
+        end = (format_timecode(self.task.clip_end) if self.task.clip_end is not None
+               else self.translator.translate('trim_to_end'))
+        return self.translator.translate('trim_badge').format(start=start, end=end)
+
     def update_ui(self):
-        self.title_label.setText(self.task.title)
+        badge = self._clip_badge()
+        self.title_label.setText(f'{self.task.title}  ·  {badge}' if badge else self.task.title)
         status = self.task.status
         self._apply_state_look(status)
 

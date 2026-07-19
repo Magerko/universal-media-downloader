@@ -571,6 +571,19 @@ class DownloadWorker(QRunnable):
             else:
                 ydl_opts['format'] = chosen_format
                 ydl_opts['postprocessors'] = self._video_postprocessors()
+            if self.task.has_clip:
+                start, end = self.task.clip_start, self.task.clip_end
+                # yt-dlp ждёт функцию, а не пару чисел: она вызывается для
+                # каждого видео и может вернуть несколько кусков. Нам нужен
+                # один, границы которого уже выбраны человеком.
+                ydl_opts['download_ranges'] = lambda info, ydl: [{
+                    'start_time': start if start is not None else 0,
+                    'end_time': end if end is not None else (info.get('duration') or 0),
+                }]
+                # Без этого ключа рез идёт по ближайшему опорному кадру и
+                # уезжает на несколько секунд от заданного момента.
+                ydl_opts['force_keyframes_at_cuts'] = True
+
             if self.settings.value('subtitles_enabled', False, type=bool):
                 ydl_opts['writesubtitles'] = True
                 ydl_opts['subtitleslangs'] = ['en', 'ru', 'uk']

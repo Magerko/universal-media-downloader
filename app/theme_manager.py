@@ -120,6 +120,9 @@ QLabel {{
     font-weight: 600;
     color: {text};
 }}
+#ErrorLabel {{
+    color: #ff6b6b;
+}}
 #UrlLabel, #StatusLabelItem, #PlaceholderLabel, #HintLabel {{
     color: {text_secondary};
     background: transparent;

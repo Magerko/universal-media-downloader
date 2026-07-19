@@ -41,6 +41,15 @@ class DownloadTask(QObject):
         self.current_filename = None
         self.final_filepath = None
         self.thumbnail_loading = False
+        self.duration = None
+        # Границы обрезки в секундах. None означает «от начала» и «до конца»
+        # соответственно, поэтому отличать их от нуля обязательно.
+        self.clip_start = None
+        self.clip_end = None
+
+    @property
+    def has_clip(self):
+        return self.clip_start is not None or self.clip_end is not None
 
     @property
     def status(self):
@@ -56,6 +65,7 @@ class DownloadTask(QObject):
         self.thumbnail_url = info.get('thumbnail')
         self.platform = info.get('extractor_key', 'Unknown')
         self.video_id = info.get('id')
+        self.duration = info.get('duration')
         self.info_updated.emit()
         self.set_status(self.Status.PENDING)
         if self.thumbnail_url and not self.thumbnail_loading:
