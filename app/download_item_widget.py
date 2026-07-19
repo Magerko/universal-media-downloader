@@ -6,6 +6,12 @@ from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from .download_task import DownloadTask
 from . import paths
 
+
+def _current_theme() -> str:
+    """Тема из настроек: карточка создаётся вне окна и его настроек не видит."""
+    from PyQt6.QtCore import QSettings
+    return QSettings('Magerko', 'UniversalMediaDownloader').value('theme', 'dark')
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,7 +75,7 @@ class DownloadItemWidget(QWidget):
         self.remove_button.setObjectName('RemoveButton')
         self.remove_button.setToolTip(self.translator.translate('status_stopped'))
 
-        close_icon_path = paths.resource_path('assets', 'icons', 'close.svg')
+        close_icon_path = paths.icon_path('close', _current_theme())
         if os.path.exists(close_icon_path):
             icon = QIcon(close_icon_path)
             if not icon.isNull():

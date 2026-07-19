@@ -281,21 +281,21 @@ class MainWindow(QMainWindow):
         bottom_bar_layout = QHBoxLayout(bottom_bar)
         bottom_bar_layout.setContentsMargins(15, 5, 15, 5)
 
-        icon_path = paths.resource_path('assets', 'icons')
+        theme = self.settings.value('theme', 'dark')
         self.download_button = QPushButton(self.translator.translate('download_all'))
-        self.download_button.setIcon(QIcon(os.path.join(icon_path, 'download.svg')))
+        self.download_button.setIcon(QIcon(paths.icon_path('download', theme)))
         self.download_button.setObjectName('ActionButton')
 
         self.threads_label = QLabel("")
         self.threads_label.setObjectName('StatusLabel')
 
         self.stop_button = QPushButton(self.translator.translate('stop'))
-        self.stop_button.setIcon(QIcon(os.path.join(icon_path, 'stop.svg')))
+        self.stop_button.setIcon(QIcon(paths.icon_path('stop', theme)))
         self.stop_button.setObjectName('ActionButton')
         self.stop_button.setEnabled(False)
 
         self.clear_button = QPushButton(self.translator.translate('clear_completed'))
-        self.clear_button.setIcon(QIcon(os.path.join(icon_path, 'clear.svg')))
+        self.clear_button.setIcon(QIcon(paths.icon_path('clear', theme)))
         self.clear_button.setObjectName('ActionButton')
 
         self.btn_open_save = QToolButton()

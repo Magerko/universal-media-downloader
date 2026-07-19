@@ -36,6 +36,17 @@ def resource_path(*parts: str) -> str:
     return os.path.join(roots[0], relative)
 
 
+def icon_path(name: str, theme: str = 'dark') -> str:
+    """Путь к иконке из набора под тему.
+
+    Наборы различаются только цветом контура. Один общий серый давал на
+    светлом фоне 3,4:1 — нижнюю границу даже для графики; раздельные значения
+    дают 8-10:1 в обеих темах.
+    """
+    folder = theme if theme in ('dark', 'light') else 'dark'
+    return resource_path('assets', 'icons', folder, f'{name}.svg')
+
+
 def user_data_dir() -> str:
     if os.name == 'nt':
         base = os.environ.get('APPDATA') or os.path.expanduser('~')
