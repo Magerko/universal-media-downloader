@@ -13,7 +13,7 @@
     "about": "О программе",
     "download_all": "Скачать все",
     "stop": "Стоп",
-    "clear_completed": "Очистить завершенные",
+    "clear_completed": "Очистить завершённые",
     "open_save_folder": "Открыть папку загрузок",
     "open_logs": "Открыть логи",
     "waiting": "Ожидание...",
@@ -139,5 +139,10 @@
     "format_container": "Формат",
     "format_size": "Размер",
     "format_apply": "Выбрать",
-    "format_auto": "Как в настройках"
+    "format_auto": "Как в настройках",
+    "theme_dark": "Тёмная",
+    "theme_light": "Светлая",
+    "card_quality": "Качество",
+    "card_trim": "Обрезать",
+    "card_open": "Показать файл"
 }

@@ -139,5 +139,10 @@
     "format_container": "Container",
     "format_size": "Size",
     "format_apply": "Choose",
-    "format_auto": "Use settings"
+    "format_auto": "Use settings",
+    "theme_dark": "Dark",
+    "theme_light": "Light",
+    "card_quality": "Quality",
+    "card_trim": "Trim",
+    "card_open": "Show file"
 }

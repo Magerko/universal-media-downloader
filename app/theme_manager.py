@@ -54,6 +54,16 @@ LIGHT = {
     'disabled_text': '#aab0ba',
 }
 
+def _arrow_url(theme, name='down'):
+    """Путь к стрелке для выпадающих списков в виде, понятном Qt.
+
+    В QSS путь пишется через прямые слэши в любой системе: обратный слэш
+    Windows там считается экранированием и правило молча не применяется.
+    """
+    from . import paths
+    return paths.icon_path(name, theme).replace('\\', '/')
+
+
 _TEMPLATE = """
 QWidget {{
     background-color: {bg};
@@ -119,6 +129,21 @@ QLabel {{
     font-size: 14px;
     font-weight: 600;
     color: {text};
+}}
+/* Кнопки на карточке видео: заметные, но легче основных — они не должны
+   спорить с названием ролика и кнопкой «Скачать все». */
+#CardButton {{
+    background: transparent;
+    color: {text_muted};
+    border: 1px solid {border};
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 12px;
+}}
+#CardButton:hover {{
+    background-color: {hover};
+    color: {text};
+    border-color: {border_strong};
 }}
 #ErrorLabel {{
     color: #ff6b6b;
@@ -284,15 +309,32 @@ QLineEdit, QComboBox, QSpinBox {{
     selection-background-color: {accent_deep};
     selection-color: #ffffff;
 }}
+QComboBox {{
+    /* Место под стрелку, иначе длинные пункты заезжают под неё. */
+    padding-right: 26px;
+}}
 QComboBox:hover, QSpinBox:hover, QLineEdit:hover {{
     border-color: {border_strong};
 }}
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
     border-color: {accent};
 }}
+/* Без стрелки выпадающий список выглядел ровно как поле ввода: «Тёмная»,
+   «Лучшее», «MP4 без перекодирования» читались как текст, куда можно
+   печатать, и понять, что это выбор, можно было только ткнув. */
 QComboBox::drop-down {{
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
     border: none;
-    width: 22px;
+    width: 24px;
+}}
+QComboBox::down-arrow {{
+    image: url({arrow});
+    width: 14px;
+    height: 14px;
+}}
+QComboBox::down-arrow:disabled {{
+    image: none;
 }}
 QComboBox QAbstractItemView {{
     background-color: {raised};
@@ -303,10 +345,27 @@ QComboBox QAbstractItemView {{
     selection-color: {text};
     outline: none;
 }}
+/* Та же беда, что и у выпадающих списков: кнопки были залиты цветом, но без
+   стрелок — сбоку от числа висела серая полоска, по виду сломанная. */
 QSpinBox::up-button, QSpinBox::down-button {{
     background-color: {raised};
     border: none;
-    width: 16px;
+    width: 18px;
+    border-radius: 3px;
+    margin: 1px;
+}}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
+    background-color: {hover};
+}}
+QSpinBox::up-arrow {{
+    image: url({arrow_up});
+    width: 10px;
+    height: 10px;
+}}
+QSpinBox::down-arrow {{
+    image: url({arrow});
+    width: 10px;
+    height: 10px;
 }}
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled,
 QPushButton:disabled, QCheckBox:disabled, QRadioButton:disabled {{
@@ -472,7 +531,9 @@ class ThemeManager:
         app.setStyleSheet(stylesheet)
 
     def get_dark_theme(self):
-        return _TEMPLATE.format(**DARK)
+        return _TEMPLATE.format(**DARK, arrow=_arrow_url('dark'),
+                                arrow_up=_arrow_url('dark', 'up'))
 
     def get_light_theme(self):
-        return _TEMPLATE.format(**LIGHT)
+        return _TEMPLATE.format(**LIGHT, arrow=_arrow_url('light'),
+                                 arrow_up=_arrow_url('light', 'up'))

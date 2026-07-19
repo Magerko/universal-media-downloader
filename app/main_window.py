@@ -147,6 +147,19 @@ class MainWindow(QMainWindow):
         self.btn_about = QPushButton(self.translator.translate('about'))
         self.btn_about.setObjectName('NavButton')
 
+        # Четыре одинаковые надписи не показывали, где ты находишься. Правило
+        # подсветки в стилях было, но кнопки не умели быть нажатыми, поэтому
+        # оно никогда не срабатывало. Группа делает выбор единственным, а
+        # отслеживание страницы — верным при любом способе перехода, включая
+        # переход из «Настроек качества» и возврат на загрузки из кода.
+        self.nav_buttons = [self.btn_downloads, self.btn_history,
+                            self.btn_settings, self.btn_about]
+        for button in self.nav_buttons:
+            button.setCheckable(True)
+            button.setAutoExclusive(True)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_downloads.setChecked(True)
+
         nav_layout.addWidget(self.btn_downloads)
         nav_layout.addWidget(self.btn_history)
         nav_layout.addWidget(self.btn_settings)
@@ -162,7 +175,10 @@ class MainWindow(QMainWindow):
         nav_layout.addWidget(self.language_combo)
 
         self.quick_theme_combo = QComboBox()
-        self.quick_theme_combo.addItems(['Dark', 'Light'])
+        # Названия тем переводятся: «Dark» посреди русского интерфейса
+        # выглядело недоделкой.
+        self.quick_theme_combo.addItem(self.translator.translate('theme_dark'), 'dark')
+        self.quick_theme_combo.addItem(self.translator.translate('theme_light'), 'light')
         theme = self.settings.value('theme', 'dark')
         self.quick_theme_combo.setCurrentIndex(0 if theme == 'dark' else 1)
         nav_layout.addWidget(self.quick_theme_combo)
@@ -291,6 +307,7 @@ class MainWindow(QMainWindow):
 
         bottom_bar = QWidget()
         bottom_bar.setObjectName('BottomBar')
+        self.action_bar = bottom_bar
         bottom_bar_layout = QHBoxLayout(bottom_bar)
         bottom_bar_layout.setContentsMargins(15, 5, 15, 5)
 
@@ -302,23 +319,34 @@ class MainWindow(QMainWindow):
         self.threads_label = QLabel("")
         self.threads_label.setObjectName('StatusLabel')
 
+        # Главное действие в панели одно — «Скачать все». Раньше «Стоп» и
+        # «Очистить завершённые» были такими же яркими и заметными, из-за чего
+        # взгляд не находил, что тут вообще главное, а кнопка, стирающая
+        # список, выглядела приглашением её нажать.
         self.stop_button = QPushButton(self.translator.translate('stop'))
         self.stop_button.setIcon(QIcon(paths.icon_path('stop', theme)))
-        self.stop_button.setObjectName('ActionButton')
+        self.stop_button.setObjectName('SecondaryButton')
         self.stop_button.setEnabled(False)
 
         self.clear_button = QPushButton(self.translator.translate('clear_completed'))
         self.clear_button.setIcon(QIcon(paths.icon_path('clear', theme)))
-        self.clear_button.setObjectName('ActionButton')
+        self.clear_button.setObjectName('SecondaryButton')
 
+        # Раньше это были два голых значка: папка и лист бумаги. Догадаться,
+        # что первый открывает папку загрузок, а второй — журнал, было
+        # неоткуда, подсказка всплывала только при наведении.
         self.btn_open_save = QToolButton()
         self.btn_open_save.setObjectName('SecondaryButton')
         self.btn_open_save.setIcon(QIcon(paths.icon_path('folder', theme)))
+        self.btn_open_save.setText(self.translator.translate('open_save_folder'))
+        self.btn_open_save.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.btn_open_save.setToolTip(self.translator.translate('open_save_folder'))
 
         self.btn_open_logs = QToolButton()
         self.btn_open_logs.setObjectName('SecondaryButton')
         self.btn_open_logs.setIcon(QIcon(paths.icon_path('file', theme)))
+        self.btn_open_logs.setText(self.translator.translate('open_logs'))
+        self.btn_open_logs.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.btn_open_logs.setToolTip(self.translator.translate('open_logs'))
 
         self.summary_info = QLabel("")
@@ -355,6 +383,7 @@ class MainWindow(QMainWindow):
         self.btn_history.clicked.connect(lambda: self.page_stack.setCurrentIndex(1))
         self.btn_settings.clicked.connect(lambda: self.page_stack.setCurrentIndex(2))
         self.btn_about.clicked.connect(lambda: self.page_stack.setCurrentIndex(3))
+        self.page_stack.currentChanged.connect(self.on_page_changed)
 
         # History re-download signal
         self.history_page.redownload_requested.connect(self._redownload_from_history)
@@ -418,12 +447,36 @@ class MainWindow(QMainWindow):
         self.settings.sync()
         self._rebuild_recent_buttons()
 
+    def sync_theme_controls(self):
+        """Тему можно сменить и в боковой панели, и в настройках.
+
+        Списки не знали друг о друге, поэтому смена в одном месте оставляла
+        второй показывать прежнее значение — интерфейс сам себе противоречил.
+        """
+        theme = self.settings.value('theme', 'dark')
+        combo = self.quick_theme_combo
+        was_blocked = combo.blockSignals(True)
+        index = combo.findData(theme)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+        combo.blockSignals(was_blocked)
+
+    def on_page_changed(self, index):
+        if 0 <= index < len(self.nav_buttons):
+            self.nav_buttons[index].setChecked(True)
+        # Нижняя панель управляет загрузками, на остальных страницах ей нечего
+        # делать: там она только шумит и предлагает нажать то, что к странице
+        # отношения не имеет.
+        self.action_bar.setVisible(index == 0)
+
     def on_quick_theme_change(self, idx):
         theme = 'dark' if idx == 0 else 'light'
         self.settings.setValue('theme', theme)
         self.settings.sync()
         ThemeManager(self.settings).apply_theme()
         self.refresh_icons()
+        # Список темы в настройках должен показать то же самое.
+        self.settings_page.load_settings()
 
     # Иконка своя на каждую тему: светлая рисуется светло-серым, тёмная —
     # тёмно-серым. Набор выбирается при создании окна, поэтому без пересмотра

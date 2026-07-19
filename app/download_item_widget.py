@@ -81,6 +81,22 @@ class DownloadItemWidget(QWidget):
         self.status_label.setObjectName('StatusLabelItem')
         status_row.addWidget(self.status_label, 1)
 
+        # Выбор качества и обрезка жили только в меню по правой кнопке. По
+        # карточке в загрузчике правой кнопкой не жмёт почти никто, так что
+        # обе возможности были фактически спрятаны. Строка состояния наполовину
+        # пустая — здесь они на виду и не мешают.
+        self.quality_button = QPushButton(self.translator.translate('card_quality'))
+        self.quality_button.setObjectName('CardButton')
+        self.quality_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.trim_button = QPushButton(self.translator.translate('card_trim'))
+        self.trim_button.setObjectName('CardButton')
+        self.trim_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.open_button = QPushButton(self.translator.translate('card_open'))
+        self.open_button.setObjectName('CardButton')
+        self.open_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        for button in (self.quality_button, self.trim_button, self.open_button):
+            status_row.addWidget(button)
+
         info_layout.addWidget(self.title_label)
         info_layout.addWidget(self.url_label)
         info_layout.addWidget(self.progress_bar)
@@ -155,6 +171,9 @@ class DownloadItemWidget(QWidget):
         self.task.progress_updated.connect(self.on_progress_update)
         self.task.thumbnail_loaded.connect(self.set_thumbnail)
         self.remove_button.clicked.connect(self.remove_requested.emit)
+        self.quality_button.clicked.connect(self.format_requested.emit)
+        self.trim_button.clicked.connect(self.trim_requested.emit)
+        self.open_button.clicked.connect(self.open_folder_requested.emit)
 
     def on_progress_update(self, percent, text):
         self.progress_bar.setValue(percent)
@@ -172,7 +191,11 @@ class DownloadItemWidget(QWidget):
         DownloadTask.Status.FETCHING_INFO: ('#5aa9ff', 'link', 'busy'),
         DownloadTask.Status.PENDING: ('#5aa9ff', 'history', 'idle'),
         DownloadTask.Status.DOWNLOADING: ('#4ecdc4', 'download', 'progress'),
-        DownloadTask.Status.PROCESSING: ('#4ecdc4', 'settings', 'busy'),
+        # Обработка ведёт настоящий отсчёт: перекодирование сообщает и
+        # проценты, и остаток времени. Бегущая полоса рядом с «осталось
+        # 1 мин 20 сек» противоречила бы подписи — раз счёт известен, полоса
+        # должна его показывать.
+        DownloadTask.Status.PROCESSING: ('#4ecdc4', 'settings', 'progress'),
         DownloadTask.Status.COMPLETED: ('#40c463', 'check-circle', 'full'),
         DownloadTask.Status.ERROR: ('#ff6b6b', 'error', 'hidden'),
         DownloadTask.Status.STOPPED: ('#565b63', 'pause', 'frozen'),
@@ -218,12 +241,40 @@ class DownloadItemWidget(QWidget):
                else self.translator.translate('trim_to_end'))
         return self.translator.translate('trim_badge').format(start=start, end=end)
 
+    def _subtitle(self):
+        """Строка под названием.
+
+        Раньше здесь всегда висела полная ссылка: она занимала целую строку и
+        ничего не сообщала — все ссылки с одной площадки выглядят одинаково.
+        Когда сведения о видео получены, площадка и длительность полезнее;
+        до этого показываем ссылку, потому что больше пока ничего нет.
+        """
+        parts = []
+        if self.task.platform and self.task.platform != 'Unknown':
+            parts.append(self.task.platform)
+        if self.task.duration:
+            parts.append(format_timecode(self.task.duration))
+        return '  ·  '.join(parts) if parts else self.task.url
+
     def update_ui(self):
+        self.url_label.setText(self._subtitle())
+        self.url_label.setToolTip(self.task.url)
         marks = [m for m in (self.task.format_label, self._clip_badge()) if m]
         suffix = '  ·  '.join(marks)
         self.title_label.setText(f'{self.task.title}  ·  {suffix}' if suffix else self.task.title)
         status = self.task.status
         self._apply_state_look(status)
+
+        # Кнопки показываем только там, где они имеют смысл: настраивать
+        # качество у качающегося видео поздно, а открывать папку нечего, пока
+        # файла нет. Неактивная кнопка на виду заставляет гадать, почему она
+        # не нажимается, поэтому лишние просто убираем.
+        before_start = status in (DownloadTask.Status.PENDING,
+                                  DownloadTask.Status.ERROR,
+                                  DownloadTask.Status.STOPPED)
+        self.quality_button.setVisible(before_start and bool(self.task.formats))
+        self.trim_button.setVisible(before_start)
+        self.open_button.setVisible(status == DownloadTask.Status.COMPLETED)
 
         status_text_map = {
             DownloadTask.Status.PENDING: self.translator.translate('status_pending'),

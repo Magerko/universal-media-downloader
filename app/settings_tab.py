@@ -128,8 +128,8 @@ class SettingsTab(QWidget):
         form_layout = QFormLayout(group_box)
 
         self.theme_combo = QComboBox()
-        self.theme_combo.addItem('Dark', userData='dark')
-        self.theme_combo.addItem('Light', userData='light')
+        self.theme_combo.addItem('', userData='dark')
+        self.theme_combo.addItem('', userData='light')
         self.theme_label = QLabel()
         self.theme_label.setProperty("text_key", "select_theme")
         form_layout.addRow(self.theme_label, self.theme_combo)
@@ -347,6 +347,8 @@ class SettingsTab(QWidget):
                 self.populate_generic_qualities(combo)
             self.set_combo_by_data(combo, current_data)
 
+        for index, key in enumerate(('theme_dark', 'theme_light')):
+            self.theme_combo.setItemText(index, self.translator.translate(key))
         for index, key in enumerate(('container_remux', 'container_keep', 'container_convert')):
             self.container_combo.setItemText(index, self.translator.translate(key))
         self.update_container_hint()
@@ -441,9 +443,10 @@ class SettingsTab(QWidget):
             # Тема меняется из двух мест — отсюда и из списка в боковой панели.
             # Иконки надо пересмотреть в обоих случаях, иначе на кнопках
             # останется набор от прежней темы и они окажутся невидимы.
-            refresh = getattr(self.parent_window, 'refresh_icons', None)
-            if refresh:
-                refresh()
+            for name in ('refresh_icons', 'sync_theme_controls'):
+                handler = getattr(self.parent_window, name, None)
+                if handler:
+                    handler()
 
     def update_container_hint(self):
         # У каждого варианта своя цена, и она не очевидна из названия пункта.

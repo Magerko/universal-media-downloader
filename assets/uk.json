@@ -139,5 +139,10 @@
     "format_container": "Формат",
     "format_size": "Розмір",
     "format_apply": "Вибрати",
-    "format_auto": "Як у налаштуваннях"
+    "format_auto": "Як у налаштуваннях",
+    "theme_dark": "Темна",
+    "theme_light": "Світла",
+    "card_quality": "Якість",
+    "card_trim": "Обрізати",
+    "card_open": "Показати файл"
 }
