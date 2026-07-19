@@ -101,15 +101,22 @@ class MainWindow(QMainWindow):
         self.url_input.setMinimumHeight(35)
         self.url_input.setPlaceholderText(self.translator.translate('enter_link_and_press_add'))
 
+        # Иконки, а не эмодзи: эмодзи рисуются системным эмодзи-шрифтом, и при
+        # заданном шрифте интерфейса их глифов просто нет — кнопки выходили
+        # пустыми. Заодно они теперь подчиняются палитре и теме.
+        theme = self.settings.value('theme', 'dark')
+
         self.btn_add = QToolButton()
         self.btn_add.setObjectName('AddUrlButton')
-        self.btn_add.setText('➕')
+        self.btn_add.setIcon(QIcon(paths.icon_path('add', theme)))
+        self.btn_add.setIconSize(QSize(18, 18))
         self.btn_add.setFixedSize(35, 35)
         self.btn_add.setToolTip(self.translator.translate('add_link'))
 
         self.btn_file = QToolButton()
         self.btn_file.setObjectName('LoadFileButton')
-        self.btn_file.setText('📁')
+        self.btn_file.setIcon(QIcon(paths.icon_path('folder', theme)))
+        self.btn_file.setIconSize(QSize(18, 18))
         self.btn_file.setFixedSize(35, 35)
         self.btn_file.setToolTip(self.translator.translate('load_from_file'))
 
@@ -215,11 +222,14 @@ class MainWindow(QMainWindow):
         qa_layout = QHBoxLayout(self.quick_actions)
         qa_layout.setContentsMargins(0, 10, 0, 0)
         qa_layout.setSpacing(8)
-        self.btn_paste = QPushButton('📋 ' + self.translator.translate('paste_from_clipboard', 'Paste'))
+        self.btn_paste = QPushButton(QIcon(paths.icon_path('link', theme)),
+                                     ' ' + self.translator.translate('paste_from_clipboard', 'Paste'))
         self.btn_paste.setObjectName('SecondaryButton')
-        self.btn_import = QPushButton('📁 ' + self.translator.translate('load_from_file'))
+        self.btn_import = QPushButton(QIcon(paths.icon_path('folder', theme)),
+                                      ' ' + self.translator.translate('load_from_file'))
         self.btn_import.setObjectName('SecondaryButton')
-        self.btn_quality = QPushButton('⚙️ ' + self.translator.translate('open_quality_settings', 'Quality settings'))
+        self.btn_quality = QPushButton(QIcon(paths.icon_path('settings', theme)),
+                                       ' ' + self.translator.translate('open_quality_settings', 'Quality settings'))
         self.btn_quality.setObjectName('SecondaryButton')
         qa_layout.addWidget(self.btn_paste)
         qa_layout.addWidget(self.btn_import)
@@ -232,7 +242,7 @@ class MainWindow(QMainWindow):
         recent_label_layout = QHBoxLayout()
         self.recent_label = QLabel(self.translator.translate('recent', 'Recent') + ':')
 
-        self.btn_clear_recent = QPushButton('🗑️')
+        self.btn_clear_recent = QPushButton(QIcon(paths.icon_path('delete', theme)), '')
         self.btn_clear_recent.setObjectName('SecondaryButton')
         self.btn_clear_recent.setFixedSize(28, 28)
         self.btn_clear_recent.setToolTip(self.translator.translate('clear_history'))
@@ -300,12 +310,12 @@ class MainWindow(QMainWindow):
 
         self.btn_open_save = QToolButton()
         self.btn_open_save.setObjectName('SecondaryButton')
-        self.btn_open_save.setText('📂')
+        self.btn_open_save.setIcon(QIcon(paths.icon_path('folder', theme)))
         self.btn_open_save.setToolTip(self.translator.translate('open_save_folder'))
 
         self.btn_open_logs = QToolButton()
         self.btn_open_logs.setObjectName('SecondaryButton')
-        self.btn_open_logs.setText('🧾')
+        self.btn_open_logs.setIcon(QIcon(paths.icon_path('file', theme)))
         self.btn_open_logs.setToolTip(self.translator.translate('open_logs'))
 
         self.summary_info = QLabel("")
@@ -376,10 +386,12 @@ class MainWindow(QMainWindow):
         self.empty_b2.setText('• ' + self.translator.translate('empty_tip_paste', 'Paste from clipboard'))
         self.empty_b3.setText(
             '• ' + self.translator.translate('empty_tip_support', 'Supported: YouTube, TikTok, Instagram, VK, RuTube…'))
-        self.btn_paste.setText('📋 ' + self.translator.translate('paste_from_clipboard', 'Paste'))
-        self.btn_import.setText('📁 ' + self.translator.translate('load_from_file'))
-        self.btn_quality.setText('⚙️ ' + self.translator.translate('open_quality_settings', 'Quality settings'))
-        self.hint_label.setText(self.translator.translate('empty_hint', "Press Enter or ➕ to add"))
+        # Только текст: иконки заданы при создании и от языка не зависят.
+        self.btn_paste.setText(' ' + self.translator.translate('paste_from_clipboard', 'Paste'))
+        self.btn_import.setText(' ' + self.translator.translate('load_from_file'))
+        self.btn_quality.setText(' ' + self.translator.translate('open_quality_settings', 'Quality settings'))
+        self.hint_label.setText(self.translator.translate(
+            'empty_hint', 'Нажмите Enter или кнопку «плюс», чтобы добавить'))
         self.btn_open_save.setToolTip(self.translator.translate('open_save_folder'))
         self.btn_open_logs.setToolTip(self.translator.translate('open_logs'))
         self.recent_label.setText(self.translator.translate('recent', 'Recent') + ':')
