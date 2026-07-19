@@ -48,6 +48,8 @@
   "status_stopped": "Stopped",
   "general_settings": "General Settings",
   "select_theme": "Theme",
+  "proxy_settings": "Proxy Settings",
+  "enter_proxy": "Proxy",
   "parallel_downloads": "Parallel downloads",
   "download_settings": "Download Settings",
   "select_save_folder": "Select save folder",

@@ -48,6 +48,8 @@
   "status_stopped": "Зупинено",
   "general_settings": "Загальні налаштування",
   "select_theme": "Тема",
+  "proxy_settings": "Налаштування проксі",
+  "enter_proxy": "Proxy",
   "parallel_downloads": "Паралельні завантаження",
   "download_settings": "Налаштування завантаження",
   "select_save_folder": "Вибрати папку збереження",

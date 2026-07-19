@@ -5,7 +5,7 @@ import platform
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QHBoxLayout,
                              QPushButton, QFileDialog, QCheckBox, QComboBox,
                              QGridLayout, QFormLayout, QGroupBox, QSpinBox, QRadioButton, QWidget as QtWidget,
-                             QAbstractSpinBox)
+                             QAbstractSpinBox, QLineEdit)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 from .translation import Translator
@@ -114,6 +114,7 @@ class SettingsTab(QWidget):
         main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.create_general_settings(main_layout)
+        self.create_proxy_settings(main_layout)
         self.create_download_settings(main_layout)
         self.create_quality_settings(main_layout)
 
@@ -140,6 +141,21 @@ class SettingsTab(QWidget):
         self.parallel_label = QLabel()
         self.parallel_label.setProperty("text_key", "parallel_downloads")
         form_layout.addRow(self.parallel_label, self.parallel_downloads_spin)
+
+        layout.addWidget(group_box)
+
+    def create_proxy_settings(self, layout):
+        group_box = QGroupBox()
+        group_box.setProperty("title_key", "proxy_settings")
+        group_box.setObjectName("SettingsGroup")
+        form_layout = QFormLayout(group_box)
+
+        # proxy input
+        self.proxy_input = QLineEdit()
+        self.proxy_input.setProperty("text_key", "proxy")
+        self.proxy_label = QLabel()
+        self.proxy_label.setProperty("text_key", "enter_proxy")
+        form_layout.addRow(self.proxy_label, self.proxy_input)
 
         layout.addWidget(group_box)
 
@@ -272,6 +288,10 @@ class SettingsTab(QWidget):
         self.cookies_checkbox.stateChanged.connect(self.on_setting_changed)
         self.rb_cookie_file.toggled.connect(self.on_setting_changed)
         self.cookies_btn.clicked.connect(self.on_select_cookies_file)
+
+        # proxy text (url) changed
+        self.proxy_input.textChanged.connect(self.on_setting_changed)
+
         self.cookie_browser_combo.currentIndexChanged.connect(self.on_setting_changed)
         for combo in self.quality_combos.values():
             combo.currentIndexChanged.connect(self.on_setting_changed)
@@ -285,6 +305,7 @@ class SettingsTab(QWidget):
         self.rb_cookie_file.toggled.disconnect()
         self.cookies_btn.clicked.disconnect()
         self.cookie_browser_combo.currentIndexChanged.disconnect()
+        self.proxy_input.textChanged.disconnect()
         for combo in self.quality_combos.values():
             combo.currentIndexChanged.disconnect()
 
@@ -347,6 +368,8 @@ class SettingsTab(QWidget):
 
         self.parallel_downloads_spin.setValue(int(self.settings.value('parallel_downloads', 2)))
 
+        self.proxy_input.setText(self.settings.value('proxy_url'))
+
         save_path = self.settings.value('save_path', '')
         if save_path:
             self.save_path_lbl.setText(f'<a href="file:///{save_path}">{save_path}</a>')
@@ -390,6 +413,8 @@ class SettingsTab(QWidget):
 
         self.settings.setValue('subtitles_enabled', self.subtitles_checkbox.isChecked())
         self.settings.setValue('use_cookies', self.cookies_checkbox.isChecked())
+
+        self.settings.setValue('proxy_url', self.proxy_input.text())
 
         if self.rb_cookie_file.isChecked():
             self.settings.setValue('cookie_source_type', 'file')

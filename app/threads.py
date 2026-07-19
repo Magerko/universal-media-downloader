@@ -101,6 +101,7 @@ class InfoWorker(QRunnable):
 
     def run(self):
         try:
+            proxy = str(self.settings.value('proxy_url'))
             ydl_opts = {
                 'quiet': True,
                 'skip_download': True,
@@ -108,6 +109,7 @@ class InfoWorker(QRunnable):
                 # EJS support for YouTube (requires Deno runtime)
                 'enable_js': True,
                 'remote_components': {'ejs:github': True},
+                'proxy': proxy,
             }
             use_cookies = self.settings.value('use_cookies', False, type=bool)
             if use_cookies:
@@ -344,6 +346,8 @@ class DownloadWorker(QRunnable):
             quality_key = f'quality_{platform}'
             chosen_format = self.settings.value(quality_key, 'bestvideo+bestaudio/best')
             save_path = self.settings.value('save_path', '')
+            proxy = str(self.settings.value('proxy_url'))
+
             if not save_path or not os.path.isdir(save_path):
                 save_path = self._default_save_path()
             self.task.save_path = save_path
@@ -361,6 +365,7 @@ class DownloadWorker(QRunnable):
                 # EJS support for YouTube (requires Deno runtime)
                 'enable_js': True,
                 'remote_components': {'ejs:github': True},
+                'proxy': proxy,
             }
             # Only pass ffmpeg_location when we actually have one: handing
             # yt-dlp a None makes it treat "None" as a path instead of falling
