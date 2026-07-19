@@ -106,5 +106,12 @@
     "container_convert": "MP4 with re-encoding",
     "container_hint_remux": "Streams are repackaged into MP4 in seconds, quality stays bit for bit identical. The codec itself stays as the site delivered it, which modern players and browsers handle fine.",
     "container_hint_keep": "The file is kept exactly as the site delivered it, usually WEBM or MKV. Fastest option, but such files do not open everywhere.",
-    "container_hint_convert": "The video is compressed again. Takes minutes, loads the CPU heavily and costs some quality. Only needed for old players and TVs."
+    "container_hint_convert": "The video is compressed again. Takes minutes, loads the CPU heavily and costs some quality. Only needed for old players and TVs.",
+    "playlist_found_title": "This is a playlist",
+    "playlist_found_text": "The link contains {count} videos. Add them all to the queue?",
+    "playlist_add_all": "Add all",
+    "playlist_added": "Added {count} videos from the playlist",
+    "cancel": "Cancel",
+    "playlist_found_in_video": "The link points to a video inside a playlist ({count} videos). What should be downloaded?",
+    "playlist_only_this": "This video only"
 }

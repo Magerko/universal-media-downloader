@@ -87,6 +87,7 @@ thumbnail_cache = ThumbnailCache(max_size=100)
 
 class WorkerSignals(QObject):
     info_fetched = pyqtSignal(dict)
+    playlist_fetched = pyqtSignal(dict)
     finished = pyqtSignal()
     error = pyqtSignal(str)
     progress = pyqtSignal(int, str)
@@ -109,6 +110,11 @@ class InfoWorker(QRunnable):
                 # EJS support for YouTube (requires Deno runtime)
                 'enable_js': True,
                 'remote_components': {'ejs:github': True},
+                # Плейлист разворачиваем «плоско»: получаем список ссылок с
+                # названиями, не опрашивая каждое видео по отдельности. На
+                # обычную ссылку это не влияет — там по-прежнему приходят
+                # полные сведения.
+                'extract_flat': 'in_playlist',
             }
             use_cookies = self.settings.value('use_cookies', False, type=bool)
             if use_cookies:
@@ -126,7 +132,13 @@ class InfoWorker(QRunnable):
                             logger.warning(f"Browser {browser} not available for cookies: {e}")
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(self.url, download=False)
-                self.signals.info_fetched.emit(info)
+                if info.get('_type') == 'playlist':
+                    # entries может быть ленивым генератором — разворачиваем
+                    # его здесь, в фоновом потоке, а не в обработчике сигнала.
+                    info = dict(info, entries=[e for e in (info.get('entries') or []) if e])
+                    self.signals.playlist_fetched.emit(info)
+                else:
+                    self.signals.info_fetched.emit(info)
         except Exception as e:
             logger.error(f"InfoWorker error for {self.url}: {e}")
             self.signals.error.emit(str(e))
@@ -530,6 +542,11 @@ class DownloadWorker(QRunnable):
                 'socket_timeout': 30,
                 'retries': 10,
                 'fragment_retries': 3,
+                # Каждая задача — ровно одно видео. Плейлист разворачивается
+                # в отдельные задачи заранее, и без этого ключа ссылка вида
+                # «видео из плейлиста» утянула бы весь плейлист внутрь одной
+                # карточки: с общим прогрессом и одним именем файла на всех.
+                'noplaylist': True,
                 # EJS support for YouTube (requires Deno runtime)
                 'enable_js': True,
                 'remote_components': {'ejs:github': True},

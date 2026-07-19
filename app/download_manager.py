@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 class DownloadManager(QObject):
     task_added = pyqtSignal(DownloadTask)
+    playlist_found = pyqtSignal(DownloadTask, str, list)
     download_started = pyqtSignal()
     all_downloads_finished = pyqtSignal()
     status_updated = pyqtSignal(str)
@@ -76,12 +77,36 @@ class DownloadManager(QObject):
     def fetch_video_info(self, task):
         worker = InfoWorker(task.url, self.settings)
         worker.signals.info_fetched.connect(lambda info, t=task: self.on_info_fetched(t, info))
+        worker.signals.playlist_fetched.connect(lambda info, t=task: self.on_playlist_fetched(t, info))
         worker.signals.error.connect(lambda error, t=task: self.on_info_error(t, error))
         self.thread_pool.start(worker)
 
     def on_info_fetched(self, task, info):
         task.update_info(info)
         self._update_summary()
+
+    def on_playlist_fetched(self, task, info):
+        """Заменяет задачу-заглушку отдельной задачей на каждое видео.
+
+        Одной задачей плейлист качать нельзя: карточка показывала бы общий
+        прогресс без понимания, какое из видео идёт сейчас, а имя файла было
+        бы одно на всех. Поэтому ссылка на плейлист разворачивается в список.
+        """
+        entries = info.get('entries') or []
+        urls = []
+        for entry in entries:
+            url = entry.get('url') or entry.get('webpage_url')
+            if url:
+                urls.append(url)
+
+        if not urls:
+            self.on_info_error(task, 'playlist has no entries')
+            return
+
+        # Спрашиваем до того, как список задач вырастет: плейлист на несколько
+        # сотен видео человек чаще всего добавляет не нарочно, а просто
+        # скопировав ссылку из адресной строки.
+        self.playlist_found.emit(task, info.get('title') or '', urls)
 
     def on_info_error(self, task, error):
         task.set_error(self.translator.translate('error_getting_info'))

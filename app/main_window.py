@@ -3,6 +3,7 @@ import os
 import subprocess
 import logging
 import json
+from urllib.parse import urlsplit, parse_qs
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLineEdit, QPushButton, QProgressBar, QLabel,
                              QFileDialog, QMessageBox, QComboBox,
@@ -360,6 +361,7 @@ class MainWindow(QMainWindow):
         self.btn_clear_recent.clicked.connect(self._clear_recent_history)
 
         self.download_manager.task_added.connect(self.add_download_item_widget)
+        self.download_manager.playlist_found.connect(self.on_playlist_found)
         self.download_manager.download_started.connect(self.on_download_started)
         self.download_manager.all_downloads_finished.connect(self.on_all_downloads_finished)
         self.download_manager.status_updated.connect(lambda msg: self.status_label.setText(msg))
@@ -490,6 +492,60 @@ class MainWindow(QMainWindow):
             row = self.downloads_list.row(task.list_item)
             self.downloads_list.takeItem(row)
         self.update_placeholder_visibility()
+
+    def on_playlist_found(self, task, title, urls):
+        """Спрашивает, разворачивать ли плейлист в отдельные загрузки.
+
+        Отдельно разбирается самый частый случай: ссылка скопирована из
+        адресной строки во время просмотра, и в ней есть и номер видео, и
+        номер плейлиста. Формально это плейлист, но человек почти наверняка
+        хотел одно видео — поэтому такой вариант и предлагается первым.
+        """
+        single_url = self._single_video_url(task.url)
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(self.translator.translate('playlist_found_title'))
+        key = 'playlist_found_in_video' if single_url else 'playlist_found_text'
+        box.setText(self.translator.translate(key).format(count=len(urls)))
+        if title:
+            box.setInformativeText(title)
+
+        only_one = None
+        if single_url:
+            only_one = box.addButton(self.translator.translate('playlist_only_this'),
+                                     QMessageBox.ButtonRole.AcceptRole)
+        add_all = box.addButton(self.translator.translate('playlist_add_all'),
+                                QMessageBox.ButtonRole.AcceptRole)
+        cancel = box.addButton(self.translator.translate('cancel'),
+                               QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(only_one or add_all)
+        box.exec()
+        clicked = box.clickedButton()
+
+        # Заглушку убираем в любом случае: качать по ней нечего, её ссылка
+        # ведёт на плейлист, а не на конкретный файл.
+        self.remove_download_item(task)
+        if clicked is cancel:
+            return
+        if clicked is only_one:
+            self.download_manager.add_urls([single_url])
+            return
+        self.download_manager.add_urls(urls)
+        self.status_label.setText(
+            self.translator.translate('playlist_added').format(count=len(urls)))
+
+    @staticmethod
+    def _single_video_url(url):
+        """Ссылка на одно видео, если исходная указывает и на видео, и на плейлист."""
+        try:
+            parts = urlsplit(url)
+            video_id = parse_qs(parts.query).get('v', [None])[0]
+        except Exception:
+            return None
+        if not video_id:
+            return None
+        return f'https://www.youtube.com/watch?v={video_id}'
 
     def clear_completed_items(self):
         tasks_to_remove = self.download_manager.get_completed_tasks()
