@@ -19,6 +19,7 @@ from .download_manager import DownloadManager
 from .translation import Translator
 from .theme_manager import ThemeManager
 from .trim_dialog import TrimDialog
+from .format_dialog import FormatDialog
 from .flow_layout import FlowLayout
 from .update_checker import UpdateChecker
 from . import paths
@@ -483,6 +484,7 @@ class MainWindow(QMainWindow):
         item_widget.copy_link_requested.connect(lambda: QApplication.clipboard().setText(task.url))
         item_widget.start_or_retry_requested.connect(lambda: self.download_manager.start_or_retry_task(task))
         item_widget.trim_requested.connect(lambda t=task, w=item_widget: self.on_trim_requested(t, w))
+        item_widget.format_requested.connect(lambda t=task, w=item_widget: self.on_format_requested(t, w))
 
         # Connect to save history when download completes/fails/stops
         task.status_changed.connect(lambda status, t=task: self._on_task_status_changed(t, status))
@@ -494,6 +496,14 @@ class MainWindow(QMainWindow):
             row = self.downloads_list.row(task.list_item)
             self.downloads_list.takeItem(row)
         self.update_placeholder_visibility()
+
+    def on_format_requested(self, task, widget):
+        dialog = FormatDialog(self.translator, task, parent=self)
+        if dialog.exec() != FormatDialog.DialogCode.Accepted:
+            return
+        task.format_override = dialog.selected_format
+        task.format_label = dialog.selected_label
+        widget.update_ui()
 
     def on_trim_requested(self, task, widget):
         dialog = TrimDialog(self.translator, duration=task.duration,

@@ -557,6 +557,12 @@ class DownloadWorker(QRunnable):
             if self.ffmpeg_path:
                 ydl_opts['ffmpeg_location'] = self.ffmpeg_path
 
+            # Формат, выбранный вручную для этого видео, важнее качества из
+            # настроек: настройка задаётся заранее и одна на всю площадку, а
+            # здесь человек смотрел на список именно этого ролика.
+            if self.task.format_override:
+                chosen_format = self.task.format_override
+
             video_only_mode = chosen_format == 'video_only_stripped'
             if video_only_mode:
                 ydl_opts['format'] = 'bestvideo[ext=mp4]/bestvideo/best'

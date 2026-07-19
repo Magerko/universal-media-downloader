@@ -46,6 +46,12 @@ class DownloadTask(QObject):
         # соответственно, поэтому отличать их от нуля обязательно.
         self.clip_start = None
         self.clip_end = None
+        # Список доступных форматов в сокращённом виде и выбранный вручную.
+        # Полный ответ yt-dlp хранить нельзя: это десятки килобайт на видео,
+        # а в очереди их могут быть сотни.
+        self.formats = []
+        self.format_override = None
+        self.format_label = ''
 
     @property
     def has_clip(self):
@@ -66,11 +72,39 @@ class DownloadTask(QObject):
         self.platform = info.get('extractor_key', 'Unknown')
         self.video_id = info.get('id')
         self.duration = info.get('duration')
+        self.formats = self._compact_formats(info.get('formats'))
         self.info_updated.emit()
         self.set_status(self.Status.PENDING)
         if self.thumbnail_url and not self.thumbnail_loading:
             self.thumbnail_loading = True
             self.thumbnail_load_requested.emit(self.thumbnail_url, self)
+
+    @staticmethod
+    def _compact_formats(formats):
+        """Оставляет от списка форматов только то, что показываем человеку.
+
+        Форматы без картинки отбрасываем: отдельные звуковые дорожки уже
+        доступны через пункт «только звук», а в списке качества они лишь
+        мешали бы выбирать.
+        """
+        compact = []
+        for fmt in formats or []:
+            if fmt.get('vcodec') in (None, 'none'):
+                continue
+            height = fmt.get('height')
+            if not height:
+                continue
+            compact.append({
+                'format_id': fmt.get('format_id'),
+                'ext': fmt.get('ext'),
+                'height': height,
+                'fps': fmt.get('fps'),
+                'vcodec': fmt.get('vcodec') or '',
+                'has_audio': fmt.get('acodec') not in (None, 'none'),
+                'filesize': fmt.get('filesize') or fmt.get('filesize_approx'),
+            })
+        compact.sort(key=lambda f: (f['height'], f['fps'] or 0, f['filesize'] or 0), reverse=True)
+        return compact
 
     def update_current_paths(self, tmpfilename=None, filename=None):
         if tmpfilename:

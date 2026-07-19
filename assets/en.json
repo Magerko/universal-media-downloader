@@ -129,5 +129,15 @@
     "end_before_start": "The end must come after the start",
     "start_after_end_of_video": "The start is beyond the end of the video",
     "end_after_end_of_video": "The end is beyond the end of the video",
-    "trim_badge": "part {start}–{end}"
+    "trim_badge": "part {start}–{end}",
+    "format_menu": "Choose quality…",
+    "format_title": "Quality for this video",
+    "format_hint": "What the site offers for this particular video. One resolution is often available in several codecs: AV1 and VP9 are noticeably smaller than H.264 at the same quality, but older TVs and players cannot open them. Video-only tracks are merged with audio automatically.",
+    "format_resolution": "Resolution",
+    "format_fps": "FPS",
+    "format_codec": "Codec",
+    "format_container": "Container",
+    "format_size": "Size",
+    "format_apply": "Choose",
+    "format_auto": "Use settings"
 }
