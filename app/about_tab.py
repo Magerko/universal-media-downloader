@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayo
 from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QFont, QDesktopServices, QPixmap
 from .translation import Translator
-from . import paths
+from . import paths, links
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +82,17 @@ class AboutTab(QWidget):
         self.btn_support.setObjectName('AboutButton')
         self.btn_support.clicked.connect(self.on_support_clicked)
 
+        # Отдельная кнопка для гривны: карты многих украинских банков не
+        # проходят на международном сервисе, и без этого пути поддержать
+        # программу они просто не могут.
+        self.btn_support_uah = QPushButton(
+            self.translator.translate('support_author_uah', 'Поддержать (₴)'))
+        self.btn_support_uah.setObjectName('AboutButton')
+        self.btn_support_uah.clicked.connect(self.on_support_uah_clicked)
+
         buttons_layout.addWidget(self.btn_telegram)
         buttons_layout.addWidget(self.btn_support)
+        buttons_layout.addWidget(self.btn_support_uah)
 
         layout.addLayout(buttons_layout)
         layout.addStretch(1)
@@ -97,7 +106,10 @@ class AboutTab(QWidget):
         self.btn_support.setText(self.translator.translate('support_author'))
 
     def on_telegram_clicked(self):
-        QDesktopServices.openUrl(QUrl('https://t.me/mcodeg'))
+        QDesktopServices.openUrl(QUrl(links.TELEGRAM))
 
     def on_support_clicked(self):
-        QDesktopServices.openUrl(QUrl('https://donatepay.eu/don/34347'))
+        QDesktopServices.openUrl(QUrl(links.DONATE))
+
+    def on_support_uah_clicked(self):
+        QDesktopServices.openUrl(QUrl(links.DONATE_UAH))
