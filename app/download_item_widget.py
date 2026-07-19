@@ -1,6 +1,7 @@
 import os
 import logging
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QProgressBar, QPushButton, QMenu
+from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
+                             QProgressBar, QPushButton, QMenu, QFrame)
 from PyQt6.QtGui import QPixmap, QIcon, QAction
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from .download_task import DownloadTask
@@ -32,8 +33,16 @@ class DownloadItemWidget(QWidget):
 
     def initUI(self):
         main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setContentsMargins(0, 10, 10, 10)
         main_layout.setSpacing(15)
+
+        # Состояние несут три признака сразу: цветной рельс, иконка и вид
+        # полосы. Глаз ловит цвет и форму раньше, чем читает подпись, поэтому
+        # список сортируется взглядом без вчитывания в каждую карточку.
+        self.rail = QFrame()
+        self.rail.setFixedWidth(4)
+        self.rail.setObjectName('StateRail')
+        main_layout.addWidget(self.rail)
 
         self.thumbnail_label = QLabel()
         self.thumbnail_label.setFixedSize(128, 72)
@@ -59,13 +68,20 @@ class DownloadItemWidget(QWidget):
         self.progress_bar.setValue(0)
         self.progress_bar.setObjectName('ItemProgressBar')
 
+        status_row = QHBoxLayout()
+        status_row.setSpacing(6)
+        self.state_icon = QLabel()
+        self.state_icon.setFixedSize(16, 16)
+        status_row.addWidget(self.state_icon)
+
         self.status_label = QLabel()
         self.status_label.setObjectName('StatusLabelItem')
+        status_row.addWidget(self.status_label, 1)
 
         info_layout.addWidget(self.title_label)
         info_layout.addWidget(self.url_label)
         info_layout.addWidget(self.progress_bar)
-        info_layout.addWidget(self.status_label)
+        info_layout.addLayout(status_row)
 
         main_layout.addLayout(info_layout, 1)
 
@@ -134,11 +150,53 @@ class DownloadItemWidget(QWidget):
                                       Qt.TransformationMode.SmoothTransformation)
         self.thumbnail_label.setPixmap(scaled_pixmap)
 
+    # Три семьи цветов, чтобы список сортировался взглядом: идёт работа —
+    # бирюза, ждёт очереди — синий, закончилось — зелёный, красный или
+    # приглушённый. Иконка и вид полосы подтверждают то же самое.
+    STATE_LOOK = {
+        DownloadTask.Status.FETCHING_INFO: ('#5aa9ff', 'link', 'busy'),
+        DownloadTask.Status.PENDING: ('#5aa9ff', 'history', 'idle'),
+        DownloadTask.Status.DOWNLOADING: ('#4ecdc4', 'download', 'progress'),
+        DownloadTask.Status.PROCESSING: ('#4ecdc4', 'settings', 'busy'),
+        DownloadTask.Status.COMPLETED: ('#40c463', 'check-circle', 'full'),
+        DownloadTask.Status.ERROR: ('#ff6b6b', 'error', 'hidden'),
+        DownloadTask.Status.STOPPED: ('#565b63', 'pause', 'frozen'),
+    }
+
+    def _apply_state_look(self, status):
+        colour, icon_name, bar = self.STATE_LOOK.get(
+            status, ('#565b63', 'file', 'hidden'))
+
+        self.rail.setStyleSheet(
+            f'background-color: {colour}; border-radius: 2px;')
+        self.state_icon.setPixmap(
+            QIcon(paths.icon_path(icon_name, _current_theme())).pixmap(QSize(16, 16)))
+
+        if bar == 'hidden':
+            self.progress_bar.setVisible(False)
+            return
+
+        self.progress_bar.setVisible(True)
+        if bar == 'busy':
+            # Бегунок без конкретного значения: работа идёт, но доля неизвестна.
+            self.progress_bar.setRange(0, 0)
+        elif bar == 'full':
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(100)
+        elif bar == 'idle':
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
+        else:
+            # progress и frozen: значение приходит извне, у frozen оно замирает.
+            self.progress_bar.setRange(0, 100)
+
+        self.progress_bar.setStyleSheet(
+            f'QProgressBar::chunk {{ background-color: {colour}; border-radius: 3px; }}')
+
     def update_ui(self):
         self.title_label.setText(self.task.title)
         status = self.task.status
-        self.progress_bar.setVisible(
-            status == DownloadTask.Status.DOWNLOADING or status == DownloadTask.Status.PROCESSING)
+        self._apply_state_look(status)
 
         status_text_map = {
             DownloadTask.Status.PENDING: self.translator.translate('status_pending'),
