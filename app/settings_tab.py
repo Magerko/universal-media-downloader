@@ -161,6 +161,22 @@ class SettingsTab(QWidget):
         save_path_layout.addWidget(self.save_path_lbl, 1)
         v_layout.addLayout(save_path_layout)
 
+        container_layout = QHBoxLayout()
+        self.container_label = QLabel()
+        self.container_label.setProperty("text_key", "video_container")
+        self.container_combo = QComboBox()
+        self.container_combo.addItem('', userData='remux')
+        self.container_combo.addItem('', userData='keep')
+        self.container_combo.addItem('', userData='convert')
+        container_layout.addWidget(self.container_label)
+        container_layout.addWidget(self.container_combo, 1)
+        v_layout.addLayout(container_layout)
+
+        self.container_hint = QLabel()
+        self.container_hint.setObjectName('HintLabel')
+        self.container_hint.setWordWrap(True)
+        v_layout.addWidget(self.container_hint)
+
         self.subtitles_checkbox = QCheckBox()
         self.subtitles_checkbox.setProperty("text_key", "download_subtitles")
         v_layout.addWidget(self.subtitles_checkbox)
@@ -268,6 +284,8 @@ class SettingsTab(QWidget):
         self.theme_combo.currentIndexChanged.connect(self.on_setting_changed)
         self.parallel_downloads_spin.valueChanged.connect(self.on_setting_changed)
         self.save_path_btn.clicked.connect(self.on_select_save_path)
+        self.container_combo.currentIndexChanged.connect(self.on_setting_changed)
+        self.container_combo.currentIndexChanged.connect(self.update_container_hint)
         self.subtitles_checkbox.stateChanged.connect(self.on_setting_changed)
         self.cookies_checkbox.stateChanged.connect(self.on_setting_changed)
         self.rb_cookie_file.toggled.connect(self.on_setting_changed)
@@ -280,6 +298,7 @@ class SettingsTab(QWidget):
         self.theme_combo.currentIndexChanged.disconnect()
         self.parallel_downloads_spin.valueChanged.disconnect()
         self.save_path_btn.clicked.disconnect()
+        self.container_combo.currentIndexChanged.disconnect()
         self.subtitles_checkbox.stateChanged.disconnect()
         self.cookies_checkbox.stateChanged.disconnect()
         self.rb_cookie_file.toggled.disconnect()
@@ -328,6 +347,10 @@ class SettingsTab(QWidget):
                 self.populate_generic_qualities(combo)
             self.set_combo_by_data(combo, current_data)
 
+        for index, key in enumerate(('container_remux', 'container_keep', 'container_convert')):
+            self.container_combo.setItemText(index, self.translator.translate(key))
+        self.update_container_hint()
+
         save_path = self.settings.value('save_path', '')
         if save_path:
             self.save_path_lbl.setText(f'<a href="file:///{save_path}">{save_path}</a>')
@@ -352,6 +375,11 @@ class SettingsTab(QWidget):
             self.save_path_lbl.setText(f'<a href="file:///{save_path}">{save_path}</a>')
         else:
             self.save_path_lbl.setText(self.translator.translate('folder_not_selected'))
+
+        self.set_combo_by_data(
+            self.container_combo,
+            self.settings.value('video_container_policy', 'remux', type=str))
+        self.update_container_hint()
 
         self.subtitles_checkbox.setChecked(self.settings.value('subtitles_enabled', False, type=bool))
         self.cookies_checkbox.setChecked(self.settings.value('use_cookies', False, type=bool))
@@ -388,6 +416,7 @@ class SettingsTab(QWidget):
         self.settings.setValue('parallel_downloads', self.parallel_downloads_spin.value())
         self.parent_window.thread_pool.setMaxThreadCount(self.parallel_downloads_spin.value())
 
+        self.settings.setValue('video_container_policy', self.container_combo.currentData())
         self.settings.setValue('subtitles_enabled', self.subtitles_checkbox.isChecked())
         self.settings.setValue('use_cookies', self.cookies_checkbox.isChecked())
 
@@ -409,6 +438,13 @@ class SettingsTab(QWidget):
 
         if self.sender() == self.theme_combo:
             ThemeManager(self.settings).apply_theme()
+
+    def update_container_hint(self):
+        # У каждого варианта своя цена, и она не очевидна из названия пункта.
+        # Поэтому под списком всегда висит строка, объясняющая последствия
+        # выбора, а не только то, как он называется.
+        policy = self.container_combo.currentData() or 'remux'
+        self.container_hint.setText(self.translator.translate(f'container_hint_{policy}'))
 
     def update_cookie_widgets_state(self):
         use_cookies = self.cookies_checkbox.isChecked()

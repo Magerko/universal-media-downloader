@@ -5,6 +5,7 @@ import glob
 import subprocess
 import sys
 import time
+import threading
 import hashlib
 import yt_dlp
 from PyQt6.QtCore import QRunnable, pyqtSignal, QObject
@@ -170,6 +171,7 @@ class DownloadWorker(QRunnable):
         self.translator = translator
         self.signals = WorkerSignals()
         self._cancel_requested = False
+        self._final_path = None
 
     def cancel(self):
         self._cancel_requested = True
@@ -194,10 +196,29 @@ class DownloadWorker(QRunnable):
                 self.task.update_progress(percent, progress_text)
         elif d['status'] == 'finished':
             self.task.set_status(self.task.Status.PROCESSING)
-            self.task.update_progress(90, "Processing...")
+            self.task.update_progress(90, "Обработка файла...")
             final_path = d.get('filename')
             if final_path:
                 self.task.update_current_paths(filename=final_path)
+
+    # yt-dlp называет шаги обработки именами своих классов. Раньше они попадали
+    # в интерфейс как есть — человек видел «Processing: VideoConvertor» и не мог
+    # понять, что происходит с его файлом.
+    POSTPROCESSOR_NAMES = {
+        'Merger': 'Соединение видео и звука',
+        'FFmpegMerger': 'Соединение видео и звука',
+        'VideoConvertor': 'Перекодирование видео',
+        'FFmpegVideoConvertor': 'Перекодирование видео',
+        'ExtractAudio': 'Извлечение звука',
+        'FFmpegExtractAudio': 'Извлечение звука',
+        'FFmpegVideoRemuxer': 'Смена контейнера',
+        'FFmpegMetadata': 'Запись сведений о файле',
+        'EmbedThumbnail': 'Встраивание обложки',
+        'FFmpegEmbedSubtitle': 'Встраивание субтитров',
+        'FFmpegSubtitlesConvertor': 'Подготовка субтитров',
+        'MoveFiles': 'Перенос файла',
+        'MoveFilesAfterDownload': 'Перенос файла',
+    }
 
     def postprocessor_hook(self, d):
         if self.task.is_stop_requested() or self._cancel_requested:
@@ -205,9 +226,12 @@ class DownloadWorker(QRunnable):
         status = d.get('status')
         pp_name = d.get('postprocessor', '')
         if status == 'started':
-            self.task.update_progress(92, f"Processing: {pp_name}...")
+            # Незнакомое имя показываем как есть: пустая строка хуже
+            # непонятного слова, а список пополняется с версиями yt-dlp.
+            readable = self.POSTPROCESSOR_NAMES.get(pp_name, pp_name)
+            self.task.update_progress(92, f"{readable}...")
         elif status == 'finished':
-            self.task.update_progress(98, "Finalizing...")
+            self.task.update_progress(98, "Завершение...")
 
     def _default_save_path(self):
         # Used to be a "downloads" folder beside the code, which lands inside a
@@ -264,7 +288,7 @@ class DownloadWorker(QRunnable):
                                    creationflags=creation_flags)
 
         # Обновляем прогресс во время обработки
-        self.task.update_progress(99, "Removing audio (copy mode)...")
+        self.task.update_progress(99, "Удаление звука...")
 
         # Ждем завершения с периодической проверкой отмены
         while process.poll() is None:
@@ -288,33 +312,49 @@ class DownloadWorker(QRunnable):
             '-map', '0:v', '-c:v', 'libx264', '-crf', '18', '-preset', 'veryfast',
             '-movflags', '+faststart', '-an', out_path
         ]
-        # Понижаем приоритет процесса на Windows для предотвращения лагов.
-        # CREATE_NO_WINDOW нужен отдельно: без него в оконной сборке на каждый
-        # вызов ffmpeg мигает консоль.
-        creation_flags = 0
-        if sys.platform == 'win32':
-            creation_flags = 0x00004000 | subprocess.CREATE_NO_WINDOW  # BELOW_NORMAL_PRIORITY_CLASS
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   stdin=subprocess.DEVNULL,
-                                   creationflags=creation_flags)
+        self._run_ffmpeg_with_progress(
+            cmd, 'Перекодирование видео',
+            self._media_duration(in_path), base_pct=90, span_pct=9)
 
-        # Обновляем прогресс во время обработки
-        self.task.update_progress(99, "Re-encoding video...")
+    def _convert_to_mp4(self, path):
+        """Пережимает видео в mp4 с показом прогресса. Возвращает новый путь.
 
-        # Ждем завершения с периодической проверкой отмены
-        while process.poll() is None:
-            if self.task.is_stop_requested() or self._cancel_requested:
-                process.terminate()
+        Набор ключей повторяет FFmpegVideoConvertorPP из yt-dlp: '-map 0'
+        забирает все дорожки, '-dn -ignore_unknown' отбрасывает служебные
+        потоки, которые mp4 не принимает, а '-c:s mov_text' переводит субтитры
+        в единственный поддерживаемый mp4 формат.
+        """
+        if not os.path.isfile(path):
+            return path
+        base, ext = os.path.splitext(path)
+        if ext.lower() == '.mp4':
+            return path
+        out_path = base + '.converting.mp4'
+        cmd = [
+            self.ffmpeg_path, '-y', '-i', path,
+            '-map', '0', '-dn', '-ignore_unknown', '-c:s', 'mov_text',
+            '-movflags', '+faststart', out_path,
+        ]
+        try:
+            self._run_ffmpeg_with_progress(
+                cmd, 'Перекодирование видео',
+                self._media_duration(path), base_pct=90, span_pct=9)
+        except Exception:
+            if os.path.exists(out_path):
                 try:
-                    process.wait(timeout=2)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                raise yt_dlp.utils.DownloadCancelled("FFmpeg processing cancelled by user.")
-            time.sleep(0.1)
-
-        stdout, stderr = process.communicate()
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, cmd, stdout, stderr)
+                    os.remove(out_path)
+                except Exception:
+                    pass
+            raise
+        final_path = base + '.mp4'
+        os.replace(out_path, final_path)
+        # Исходник удаляем только когда результат уже на месте: иначе сбой
+        # переименования оставил бы человека вообще без файла.
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+        return final_path
 
     def _force_video_only(self, path):
         if not os.path.isfile(path):
@@ -337,6 +377,138 @@ class DownloadWorker(QRunnable):
                         pass
                 raise e
         os.replace(tmp_out, path)
+
+    def _media_duration(self, path):
+        """Длительность файла в секундах, или None если определить не вышло."""
+        probe = os.path.join(os.path.dirname(self.ffmpeg_path or ''), 'ffprobe.exe')
+        if not os.path.isfile(probe):
+            probe = 'ffprobe'
+        try:
+            out = subprocess.run(
+                [probe, '-v', 'error', '-show_entries', 'format=duration',
+                 '-of', 'csv=p=0', path],
+                capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0,
+                timeout=15)
+            value = float(out.stdout.strip())
+            return value if value > 0 else None
+        except Exception:
+            return None
+
+    def _run_ffmpeg_with_progress(self, cmd, label, duration, base_pct, span_pct):
+        """Запускает ffmpeg, переводя его вывод в проценты и оставшееся время.
+
+        Без этого обработка выглядела как замерший индикатор: yt-dlp сообщает
+        только «начал» и «закончил», а между ними на длинном видео проходят
+        минуты, и человеку не за что зацепиться. Ключ -progress заставляет
+        ffmpeg писать машиночитаемые строки вида out_time_us=..., по которым
+        уже считается и доля, и остаток.
+        """
+        self._require_ffmpeg()
+        cmd = list(cmd) + ['-progress', 'pipe:1', '-nostats']
+        creation_flags = 0
+        if sys.platform == 'win32':
+            creation_flags = 0x00004000 | subprocess.CREATE_NO_WINDOW
+        process = subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL, creationflags=creation_flags,
+            text=True, encoding='utf-8', errors='replace', bufsize=1)
+
+        # stderr обязательно вычитывать параллельно. ffmpeg пишет туда свой
+        # обычный лог, и пока мы построчно читаем stdout, буфер трубы stderr
+        # переполняется — ffmpeg встаёт на записи и не отдаёт больше ничего.
+        # Оба процесса замирают навсегда, каждый в ожидании другого.
+        stderr_chunks = []
+
+        def drain_stderr():
+            stderr_chunks.append(process.stderr.read())
+
+        stderr_reader = threading.Thread(target=drain_stderr, daemon=True)
+        stderr_reader.start()
+
+        started = time.monotonic()
+        self.task.update_progress(base_pct, f'{label}...')
+        try:
+            for line in process.stdout:
+                if self.task.is_stop_requested() or self._cancel_requested:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                    raise yt_dlp.utils.DownloadCancelled('FFmpeg processing cancelled by user.')
+                if not line.startswith('out_time_us=') or not duration:
+                    continue
+                try:
+                    done = int(line.split('=', 1)[1]) / 1_000_000
+                except ValueError:
+                    continue
+                fraction = max(0.0, min(1.0, done / duration))
+                elapsed = time.monotonic() - started
+                # ETA считаем от фактической скорости обработки, а не от
+                # длительности видео: на разном железе она отличается в разы.
+                if fraction > 0.01:
+                    remaining = elapsed / fraction - elapsed
+                    text = f'{label} — осталось {self._format_eta(remaining)}'
+                else:
+                    text = f'{label}...'
+                # progress_updated объявлен как pyqtSignal(int, str): дробное
+                # значение здесь уронило бы обработку с TypeError.
+                self.task.update_progress(int(base_pct + span_pct * fraction), text)
+        finally:
+            process.stdout.close()
+
+        returncode = process.wait()
+        stderr_reader.join(timeout=5)
+        process.stderr.close()
+        if returncode != 0:
+            raise subprocess.CalledProcessError(
+                returncode, cmd, None, ''.join(c for c in stderr_chunks if c))
+
+    @staticmethod
+    def _format_eta(seconds):
+        seconds = int(max(0, seconds))
+        if seconds < 60:
+            return f'{seconds} сек'
+        minutes, seconds = divmod(seconds, 60)
+        if minutes < 60:
+            return f'{minutes} мин {seconds:02d} сек'
+        hours, minutes = divmod(minutes, 60)
+        return f'{hours} ч {minutes:02d} мин'
+
+    def _record_final_path(self, path):
+        self._final_path = path
+        self.task.update_current_paths(filename=path)
+
+    def _video_postprocessors(self):
+        """Что делать с контейнером скачанного видео.
+
+        Раньше здесь безусловно стоял FFmpegVideoConvertor в mp4. Внутри yt-dlp
+        конвертер вызывает stream_copy_opts(False) — то есть БЕЗ '-c copy', и
+        каждый webm (а YouTube отдаёт webm почти на всех высоких качествах)
+        пережимался целиком. Это минуты работы процессора и потеря качества
+        ради смены расширения файла.
+
+        Ремуксер — тот же класс, но с '-c copy': те же дорожки перекладываются
+        в контейнер mp4 за секунды и без единого потерянного бита. Поэтому он
+        и стоит по умолчанию, а перекодирование осталось осознанным выбором
+        для тех, кому нужна совместимость со старой техникой.
+        """
+        policy = self.settings.value('video_container_policy', 'remux', type=str)
+        if policy == 'keep':
+            return []
+        if policy == 'convert':
+            # Перекодирование делаем сами, после загрузки. Внутри yt-dlp этот
+            # шаг молчит: postprocessor_hook сообщает только «начал» и
+            # «закончил», а между ними на длинном видео проходят минуты. Свой
+            # вызов ffmpeg даёт и проценты, и остаток времени.
+            return []
+        # Перечисляем контейнеры явно, а не пишем просто 'mp4'. Строка вида
+        # 'webm>mp4' означает «webm переложить в mp4», а для всего остального
+        # yt-dlp не найдёт правило и молча пропустит файл. Если бы мы написали
+        # 'mp4', под ремукс попал бы любой контейнер, включая те, чьи кодеки
+        # mp4 не принимает, — и вместо готового файла человек увидел бы ошибку.
+        return [{'key': 'FFmpegVideoRemuxer', 'preferedformat': 'webm>mp4/mkv>mp4/flv>mp4'}]
 
     def run(self):
         try:
@@ -371,9 +543,7 @@ class DownloadWorker(QRunnable):
             video_only_mode = chosen_format == 'video_only_stripped'
             if video_only_mode:
                 ydl_opts['format'] = 'bestvideo[ext=mp4]/bestvideo/best'
-                ydl_opts['postprocessors'] = [
-                    {'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}
-                ]
+                ydl_opts['postprocessors'] = self._video_postprocessors()
             elif chosen_format in ['bestaudio/best', 'bestaudio'] or str(chosen_format).startswith('bestaudio'):
                 ydl_opts['format'] = chosen_format
                 ydl_opts['postprocessors'] = [{
@@ -383,10 +553,7 @@ class DownloadWorker(QRunnable):
                 }]
             else:
                 ydl_opts['format'] = chosen_format
-                ydl_opts['postprocessors'] = [{
-                    'key': 'FFmpegVideoConvertor',
-                    'preferedformat': 'mp4',
-                }]
+                ydl_opts['postprocessors'] = self._video_postprocessors()
             if self.settings.value('subtitles_enabled', False, type=bool):
                 ydl_opts['writesubtitles'] = True
                 ydl_opts['subtitleslangs'] = ['en', 'ru', 'uk']
@@ -404,21 +571,38 @@ class DownloadWorker(QRunnable):
                             ydl_opts['cookiesfrombrowser'] = (browser,)
                         except Exception as e:
                             logger.warning(f"Browser {browser} not available for cookies: {e}")
+            # Настоящий путь к готовому файлу приходит из post_hooks: yt-dlp
+            # зовёт их последними, уже после всей постобработки, и передаёт
+            # info_dict['filepath']. Раньше имя предсказывалось заранее —
+            # расширение просто подменялось на mp4, если были постпроцессоры.
+            # Предсказание врёт при любом раскладе, кроме перекодирования:
+            # при «оставить как есть» файл остаётся webm, при ремуксе mov
+            # остаётся mov. Приложение отчитывалось бы о готовности файла,
+            # которого нет по указанному пути.
+            self._final_path = None
+            ydl_opts['post_hooks'] = [self._record_final_path]
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(self.task.url, download=False)
-                info_copy = info.copy()
-                if 'postprocessors' in ydl_opts:
-                    info_copy['ext'] = 'mp4'
-                final_filepath = ydl.prepare_filename(info_copy)
+                predicted_filepath = ydl.prepare_filename(info)
                 if self.task.is_stop_requested() or self._cancel_requested:
                     raise yt_dlp.utils.DownloadCancelled("Download stopped before start.")
                 ydl.download([self.task.url])
+                # Хук не срабатывает, если файл уже был скачан ранее; тогда
+                # опираемся на предсказание, как и раньше.
+                final_filepath = self._final_path or predicted_filepath
                 if video_only_mode:
                     try:
-                        self.task.update_progress(98, "Processing video (removing audio)...")
+                        self.task.update_progress(98, "Обработка видео (удаление звука)...")
                         self._force_video_only(final_filepath)
                     except Exception as e:
                         logger.error(f"Strip-audio failed for {self.task.url}: {e}")
+                        raise
+                elif self.settings.value('video_container_policy', 'remux', type=str) == 'convert':
+                    try:
+                        final_filepath = self._convert_to_mp4(final_filepath)
+                    except Exception as e:
+                        logger.error(f"Convert to mp4 failed for {self.task.url}: {e}")
                         raise
                 if not self.task.is_stop_requested() and not self._cancel_requested:
                     self.task.set_completed(final_filepath)
