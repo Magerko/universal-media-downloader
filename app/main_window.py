@@ -104,9 +104,8 @@ class MainWindow(QMainWindow):
         self.url_input.setMinimumHeight(35)
         self.url_input.setPlaceholderText(self.translator.translate('enter_link_and_press_add'))
 
-        # Иконки, а не эмодзи: эмодзи рисуются системным эмодзи-шрифтом, и при
-        # заданном шрифте интерфейса их глифов просто нет — кнопки выходили
-        # пустыми. Заодно они теперь подчиняются палитре и теме.
+        # Иконки, а не эмодзи: в Segoe UI нужных глифов нет и кнопка
+        # оказывается пустой.
         theme = self.settings.value('theme', 'dark')
 
         self.btn_add = QToolButton()
@@ -147,11 +146,8 @@ class MainWindow(QMainWindow):
         self.btn_about = QPushButton(self.translator.translate('about'))
         self.btn_about.setObjectName('NavButton')
 
-        # Четыре одинаковые надписи не показывали, где ты находишься. Правило
-        # подсветки в стилях было, но кнопки не умели быть нажатыми, поэтому
-        # оно никогда не срабатывало. Группа делает выбор единственным, а
-        # отслеживание страницы — верным при любом способе перехода, включая
-        # переход из «Настроек качества» и возврат на загрузки из кода.
+        # Подсветка текущей страницы: #NavButton:checked в стилях уже был,
+        # кнопкам не хватало checkable.
         self.nav_buttons = [self.btn_downloads, self.btn_history,
                             self.btn_settings, self.btn_about]
         for button in self.nav_buttons:
@@ -448,11 +444,7 @@ class MainWindow(QMainWindow):
         self._rebuild_recent_buttons()
 
     def sync_theme_controls(self):
-        """Тему можно сменить и в боковой панели, и в настройках.
-
-        Списки не знали друг о друге, поэтому смена в одном месте оставляла
-        второй показывать прежнее значение — интерфейс сам себе противоречил.
-        """
+        """Держит списки темы в боковой панели и в настройках в согласии."""
         theme = self.settings.value('theme', 'dark')
         combo = self.quick_theme_combo
         was_blocked = combo.blockSignals(True)
@@ -464,9 +456,7 @@ class MainWindow(QMainWindow):
     def on_page_changed(self, index):
         if 0 <= index < len(self.nav_buttons):
             self.nav_buttons[index].setChecked(True)
-        # Нижняя панель управляет загрузками, на остальных страницах ей нечего
-        # делать: там она только шумит и предлагает нажать то, что к странице
-        # отношения не имеет.
+        # Панель управляет загрузками — на других страницах она не нужна.
         self.action_bar.setVisible(index == 0)
 
     def on_quick_theme_change(self, idx):
@@ -478,10 +468,8 @@ class MainWindow(QMainWindow):
         # Список темы в настройках должен показать то же самое.
         self.settings_page.load_settings()
 
-    # Иконка своя на каждую тему: светлая рисуется светло-серым, тёмная —
-    # тёмно-серым. Набор выбирается при создании окна, поэтому без пересмотра
-    # после смены темы на кнопках оставались иконки от прежней: светло-серые
-    # на белом фоне попросту не видны, и кнопки снова выглядели пустыми.
+    # Набор иконок свой на каждую тему, после переключения его надо
+    # перечитать — иначе светло-серые останутся на белом фоне.
     _THEMED_ICONS = (
         ('btn_add', 'add'), ('btn_file', 'folder'), ('btn_paste', 'link'),
         ('btn_import', 'folder'), ('btn_quality', 'settings'),
@@ -497,7 +485,7 @@ class MainWindow(QMainWindow):
             if widget is not None:
                 widget.setIcon(QIcon(paths.icon_path(name, theme)))
 
-        # Крестики на уже добавленных карточках тоже несут иконку темы.
+        # Крестики на уже добавленных карточках — тоже.
         close_icon = QIcon(paths.icon_path('close', theme))
         for row in range(self.downloads_list.count()):
             widget = self.downloads_list.itemWidget(self.downloads_list.item(row))
@@ -528,9 +516,7 @@ class MainWindow(QMainWindow):
             self._rebuild_recent_buttons()
 
     def on_load_from_file(self):
-        # Диалог открывается там, где человек был в прошлый раз. Иначе список
-        # ссылок, лежащий в глубокой папке, приходится искать заново каждый
-        # раз — а берут его обычно из одного и того же места.
+        # Открываемся там, где были в прошлый раз.
         last = self.settings.value('last_import_dir', '', type=str)
         file_path, _ = QFileDialog.getOpenFileName(self, self.translator.translate('load_from_file'),
                                                    last if os.path.isdir(last) else '',
@@ -604,10 +590,9 @@ class MainWindow(QMainWindow):
     def on_playlist_found(self, task, title, urls):
         """Спрашивает, разворачивать ли плейлист в отдельные загрузки.
 
-        Отдельно разбирается самый частый случай: ссылка скопирована из
-        адресной строки во время просмотра, и в ней есть и номер видео, и
-        номер плейлиста. Формально это плейлист, но человек почти наверняка
-        хотел одно видео — поэтому такой вариант и предлагается первым.
+        Ссылка с номером видео и номером плейлиста сразу — обычно взята из
+        адресной строки во время просмотра, поэтому «только это видео» идёт
+        первым вариантом.
         """
         single_url = self._single_video_url(task.url)
 
@@ -631,8 +616,7 @@ class MainWindow(QMainWindow):
         box.exec()
         clicked = box.clickedButton()
 
-        # Заглушку убираем в любом случае: качать по ней нечего, её ссылка
-        # ведёт на плейлист, а не на конкретный файл.
+        # Заглушку убираем в любом случае: её ссылка ведёт на плейлист.
         self.remove_download_item(task)
         if clicked is cancel:
             return
@@ -689,18 +673,12 @@ class MainWindow(QMainWindow):
         self._open_path(folder)
 
     def open_task_folder(self, task):
-        """Открывает папку с готовым файлом и подсвечивает сам файл.
-
-        Раньше отсюда открывалась общая папка загрузок. При очереди из
-        десятков видео человек попадал в список файлов и искал свой глазами,
-        хотя приложение точно знает, куда его положило.
-        """
+        """Открывает папку с готовым файлом и подсвечивает его."""
         path = task.final_filepath
         if path and os.path.isfile(path):
             self._reveal_file(path)
             return
-        # Файл могли переместить или удалить уже после загрузки — тогда
-        # показываем хотя бы папку, а не молчим.
+        # Файл могли переместить или удалить — показываем хотя бы папку.
         folder = os.path.dirname(path) if path else ''
         if folder and os.path.isdir(folder):
             self._open_path(folder)
@@ -711,8 +689,8 @@ class MainWindow(QMainWindow):
         path = os.path.normpath(path)
         try:
             if sys.platform.startswith('win'):
-                # Кавычки обязательны: в названиях роликов постоянно есть
-                # пробелы и запятые, а explorer разбирает строку сам.
+                # Кавычки обязательны: explorer разбирает строку сам, а в
+                # названиях роликов сплошь пробелы и запятые.
                 subprocess.Popen(f'explorer /select,"{path}"')
             elif sys.platform == 'darwin':
                 subprocess.Popen(['open', '-R', path])
@@ -817,12 +795,9 @@ class MainWindow(QMainWindow):
     def _startup_checks(self):
         """Проверки при запуске.
 
-        Раньше здесь показывалось модальное окно про отсутствующий Deno — на
-        каждом запуске, до того как человек успевал что-то сделать. При этом
-        YouTube без него качается, пропадают лишь отдельные форматы. Ругаться
-        заранее на проблему, которая может никогда не проявиться, — это учить
-        закрывать окно не читая. Подсказка теперь появляется в тексте ошибки
-        того видео, которое действительно не скачалось.
+        Про отсутствующий Deno здесь не предупреждаем: YouTube без него
+        качается, пропадают лишь отдельные форматы. Подсказка появляется в
+        тексте ошибки конкретного видео.
         """
         # Check for yt-dlp updates (silent mode - only notify if update available)
         self.update_checker.check_for_updates(silent=True)

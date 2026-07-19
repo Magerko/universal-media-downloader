@@ -6,12 +6,7 @@ from .timecode import parse_timecode, format_timecode, validate_range
 
 
 class TrimDialog(QDialog):
-    """Выбор куска видео, который нужно скачать.
-
-    Оба поля можно оставить пустыми: пустое начало означает «с начала»,
-    пустой конец — «до конца». Это позволяет одним и тем же окном и
-    отрезать вступление, и обрезать хвост, не заставляя вводить лишнее.
-    """
+    """Выбор куска видео. Пустое поле — «с начала» или «до конца»."""
 
     def __init__(self, translator, duration=None, start=None, end=None, parent=None):
         super().__init__(parent)
@@ -94,7 +89,6 @@ class TrimDialog(QDialog):
         self.accept()
 
     def _show_error(self, key):
-        # Ошибку показываем прямо в окне, а не отдельным сообщением поверх:
-        # так видно, что именно набрано неверно, и можно сразу исправить.
+        # В самом окне, а не сообщением поверх: видно, что исправлять.
         self.error_label.setText(self.translator.translate(key))
         self.error_label.show()

@@ -111,10 +111,8 @@ class InfoWorker(QRunnable):
                 # EJS support for YouTube (requires Deno runtime)
                 'enable_js': True,
                 'remote_components': {'ejs:github': True},
-                # Плейлист разворачиваем «плоско»: получаем список ссылок с
-                # названиями, не опрашивая каждое видео по отдельности. На
-                # обычную ссылку это не влияет — там по-прежнему приходят
-                # полные сведения.
+                # Плоский разбор: ссылки с названиями без опроса каждого
+                # видео. На одиночную ссылку не влияет.
                 'extract_flat': 'in_playlist',
             }
             use_cookies = self.settings.value('use_cookies', False, type=bool)
@@ -134,8 +132,7 @@ class InfoWorker(QRunnable):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(self.url, download=False)
                 if info.get('_type') == 'playlist':
-                    # entries может быть ленивым генератором — разворачиваем
-                    # его здесь, в фоновом потоке, а не в обработчике сигнала.
+                    # entries бывает генератором — разворачиваем в потоке.
                     info = dict(info, entries=[e for e in (info.get('entries') or []) if e])
                     self.signals.playlist_fetched.emit(info)
                 else:
@@ -214,9 +211,7 @@ class DownloadWorker(QRunnable):
             if final_path:
                 self.task.update_current_paths(filename=final_path)
 
-    # yt-dlp называет шаги обработки именами своих классов. Раньше они попадали
-    # в интерфейс как есть — человек видел «Processing: VideoConvertor» и не мог
-    # понять, что происходит с его файлом.
+    # yt-dlp зовёт шаги обработки именами своих классов.
     POSTPROCESSOR_NAMES = {
         'Merger': 'Соединение видео и звука',
         'FFmpegMerger': 'Соединение видео и звука',
@@ -239,8 +234,7 @@ class DownloadWorker(QRunnable):
         status = d.get('status')
         pp_name = d.get('postprocessor', '')
         if status == 'started':
-            # Незнакомое имя показываем как есть: пустая строка хуже
-            # непонятного слова, а список пополняется с версиями yt-dlp.
+            # Незнакомое имя оставляем как есть: список растёт с версиями.
             readable = self.POSTPROCESSOR_NAMES.get(pp_name, pp_name)
             self.task.update_progress(92, f"{readable}...")
         elif status == 'finished':
@@ -330,12 +324,9 @@ class DownloadWorker(QRunnable):
             self._media_duration(in_path), base_pct=90, span_pct=9)
 
     def _convert_to_mp4(self, path):
-        """Пережимает видео в mp4 с показом прогресса. Возвращает новый путь.
+        """Пережимает видео в mp4 с прогрессом. Возвращает новый путь.
 
-        Набор ключей повторяет FFmpegVideoConvertorPP из yt-dlp: '-map 0'
-        забирает все дорожки, '-dn -ignore_unknown' отбрасывает служебные
-        потоки, которые mp4 не принимает, а '-c:s mov_text' переводит субтитры
-        в единственный поддерживаемый mp4 формат.
+        Ключи те же, что у FFmpegVideoConvertorPP из yt-dlp.
         """
         if not os.path.isfile(path):
             return path
@@ -361,8 +352,7 @@ class DownloadWorker(QRunnable):
             raise
         final_path = base + '.mp4'
         os.replace(out_path, final_path)
-        # Исходник удаляем только когда результат уже на месте: иначе сбой
-        # переименования оставил бы человека вообще без файла.
+        # Только после успешного переименования.
         try:
             os.remove(path)
         except Exception:
@@ -409,14 +399,7 @@ class DownloadWorker(QRunnable):
             return None
 
     def _run_ffmpeg_with_progress(self, cmd, label, duration, base_pct, span_pct):
-        """Запускает ffmpeg, переводя его вывод в проценты и оставшееся время.
-
-        Без этого обработка выглядела как замерший индикатор: yt-dlp сообщает
-        только «начал» и «закончил», а между ними на длинном видео проходят
-        минуты, и человеку не за что зацепиться. Ключ -progress заставляет
-        ffmpeg писать машиночитаемые строки вида out_time_us=..., по которым
-        уже считается и доля, и остаток.
-        """
+        """Запускает ffmpeg, переводя -progress в проценты и остаток времени."""
         self._require_ffmpeg()
         cmd = list(cmd) + ['-progress', 'pipe:1', '-nostats']
         creation_flags = 0
@@ -427,10 +410,8 @@ class DownloadWorker(QRunnable):
             stdin=subprocess.DEVNULL, creationflags=creation_flags,
             text=True, encoding='utf-8', errors='replace', bufsize=1)
 
-        # stderr обязательно вычитывать параллельно. ffmpeg пишет туда свой
-        # обычный лог, и пока мы построчно читаем stdout, буфер трубы stderr
-        # переполняется — ffmpeg встаёт на записи и не отдаёт больше ничего.
-        # Оба процесса замирают навсегда, каждый в ожидании другого.
+        # stderr читаем параллельно: иначе его буфер переполнится и ffmpeg
+        # встанет на записи, пока мы ждём stdout. Дедлок.
         stderr_chunks = []
 
         def drain_stderr():
@@ -458,15 +439,13 @@ class DownloadWorker(QRunnable):
                     continue
                 fraction = max(0.0, min(1.0, done / duration))
                 elapsed = time.monotonic() - started
-                # ETA считаем от фактической скорости обработки, а не от
-                # длительности видео: на разном железе она отличается в разы.
+                # По фактической скорости: на разном железе она разная.
                 if fraction > 0.01:
                     remaining = elapsed / fraction - elapsed
                     text = f'{label} — осталось {self._format_eta(remaining)}'
                 else:
                     text = f'{label}...'
-                # progress_updated объявлен как pyqtSignal(int, str): дробное
-                # значение здесь уронило бы обработку с TypeError.
+                # pyqtSignal(int, str) — дробное значение уронит emit.
                 self.task.update_progress(int(base_pct + span_pct * fraction), text)
         finally:
             process.stdout.close()
@@ -496,13 +475,10 @@ class DownloadWorker(QRunnable):
     )
 
     def _explain_error(self, message):
-        """Дополняет ошибку подсказкой, если причина известна.
+        """Дополняет ошибку подсказкой про Deno, если она про JS.
 
-        Голое сообщение yt-dlp вроде «Signature extraction failed» человеку
-        ничего не говорит. Раньше про Deno предупреждали при каждом запуске,
-        но такое окно закрывают не читая, а к моменту настоящей поломки о нём
-        уже не помнят. Поэтому подсказка появляется здесь — рядом с видео,
-        которое не скачалось.
+        Сообщения yt-dlp вроде «Signature extraction failed» сами по себе
+        ничего не объясняют.
         """
         lowered = message.lower()
         looks_like_js = any(marker in lowered for marker in self._JS_FAILURE_MARKERS)
@@ -522,31 +498,20 @@ class DownloadWorker(QRunnable):
     def _video_postprocessors(self):
         """Что делать с контейнером скачанного видео.
 
-        Раньше здесь безусловно стоял FFmpegVideoConvertor в mp4. Внутри yt-dlp
-        конвертер вызывает stream_copy_opts(False) — то есть БЕЗ '-c copy', и
-        каждый webm (а YouTube отдаёт webm почти на всех высоких качествах)
-        пережимался целиком. Это минуты работы процессора и потеря качества
-        ради смены расширения файла.
-
-        Ремуксер — тот же класс, но с '-c copy': те же дорожки перекладываются
-        в контейнер mp4 за секунды и без единого потерянного бита. Поэтому он
-        и стоит по умолчанию, а перекодирование осталось осознанным выбором
-        для тех, кому нужна совместимость со старой техникой.
+        По умолчанию ремукс: FFmpegVideoConvertor внутри yt-dlp работает без
+        '-c copy' и пережимает каждый webm целиком, тогда как ремуксер просто
+        перекладывает дорожки. Перекодирование — осознанный выбор ради
+        совместимости со старой техникой.
         """
         policy = self.settings.value('video_container_policy', 'remux', type=str)
         if policy == 'keep':
             return []
         if policy == 'convert':
-            # Перекодирование делаем сами, после загрузки. Внутри yt-dlp этот
-            # шаг молчит: postprocessor_hook сообщает только «начал» и
-            # «закончил», а между ними на длинном видео проходят минуты. Свой
-            # вызов ffmpeg даёт и проценты, и остаток времени.
+            # Перекодируем сами, после загрузки: postprocessor_hook даёт
+            # только «начал» и «закончил», без прогресса.
             return []
-        # Перечисляем контейнеры явно, а не пишем просто 'mp4'. Строка вида
-        # 'webm>mp4' означает «webm переложить в mp4», а для всего остального
-        # yt-dlp не найдёт правило и молча пропустит файл. Если бы мы написали
-        # 'mp4', под ремукс попал бы любой контейнер, включая те, чьи кодеки
-        # mp4 не принимает, — и вместо готового файла человек увидел бы ошибку.
+        # Контейнеры перечислены явно: простое 'mp4' утянуло бы в ремукс и
+        # те, чьи кодеки mp4 не принимает. Остальное yt-dlp пропустит.
         return [{'key': 'FFmpegVideoRemuxer', 'preferedformat': 'webm>mp4/mkv>mp4/flv>mp4'}]
 
     def run(self):

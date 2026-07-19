@@ -440,18 +440,14 @@ class SettingsTab(QWidget):
 
         if self.sender() == self.theme_combo:
             ThemeManager(self.settings).apply_theme()
-            # Тема меняется из двух мест — отсюда и из списка в боковой панели.
-            # Иконки надо пересмотреть в обоих случаях, иначе на кнопках
-            # останется набор от прежней темы и они окажутся невидимы.
+            # Тема меняется и отсюда, и из боковой панели.
             for name in ('refresh_icons', 'sync_theme_controls'):
                 handler = getattr(self.parent_window, name, None)
                 if handler:
                     handler()
 
     def update_container_hint(self):
-        # У каждого варианта своя цена, и она не очевидна из названия пункта.
-        # Поэтому под списком всегда висит строка, объясняющая последствия
-        # выбора, а не только то, как он называется.
+        # Цена каждого варианта из названия не видна — поясняем строкой ниже.
         policy = self.container_combo.currentData() or 'remux'
         self.container_hint.setText(self.translator.translate(f'container_hint_{policy}'))
 
@@ -464,8 +460,7 @@ class SettingsTab(QWidget):
             self.cookie_browser_combo.setEnabled(not is_file)
 
     def on_select_save_path(self):
-        # Начинаем с текущей папки сохранения: чаще всего её меняют на
-        # соседнюю, а не выбирают с нуля от корня диска.
+        # От текущей папки: её обычно меняют на соседнюю.
         current = self.settings.value('save_path', '', type=str)
         folder = QFileDialog.getExistingDirectory(self, self.translator.translate('select_save_folder'),
                                                   current if os.path.isdir(current) else '')

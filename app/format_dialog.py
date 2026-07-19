@@ -3,8 +3,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                              QHeaderView, QAbstractItemView)
 from PyQt6.QtCore import Qt
 
-# Кодек в ответе сайта записан как avc1.64002a или av01.0.09M.08 — читать
-# такое человеку незачем, поэтому приводим к привычным названиям.
+# В ответе сайта кодек выглядит как avc1.64002a — приводим к привычному.
 _CODEC_NAMES = (
     ('avc1', 'H.264'),
     ('h264', 'H.264'),
@@ -34,12 +33,10 @@ def format_size(size):
 
 
 class FormatDialog(QDialog):
-    """Выбор конкретного формата для одного видео.
+    """Выбор формата для одного видео.
 
-    Настройки задают качество заранее и одинаково для всей платформы. Здесь
-    же видно, что сайт предлагает именно для этого ролика: одно и то же
-    разрешение бывает доступно в трёх кодеках с двукратной разницей в
-    размере, и вслепую такой выбор не сделать.
+    Настройки задают качество заранее и на всю площадку; здесь видно, что
+    сайт предлагает для этого ролика.
     """
 
     AUTO = object()
@@ -96,8 +93,7 @@ class FormatDialog(QDialog):
         self.auto_button.clicked.connect(self.on_auto)
         self.table.doubleClicked.connect(self.on_accept)
 
-        # Только теперь: заполнение трогает кнопку «Выбрать», а она создаётся
-        # ниже разметки таблицы.
+        # После кнопок: заполнение трогает «Выбрать».
         self._fill_table()
 
     def _fill_table(self):
@@ -139,8 +135,7 @@ class FormatDialog(QDialog):
         fmt = formats[row]
         selector = str(fmt['format_id'])
         if not fmt.get('has_audio'):
-            # Дорожка без звука: просим yt-dlp доложить лучший звук и
-            # соединить. Без этого получилось бы немое видео.
+            # Дорожка без звука — иначе получится немое видео.
             selector = f'{selector}+bestaudio/{selector}'
         self.selected_format = selector
         self.selected_label = (f"{fmt['height']}p"

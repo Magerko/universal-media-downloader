@@ -39,9 +39,8 @@ class DownloadItemWidget(QWidget):
         main_layout.setContentsMargins(0, 10, 10, 10)
         main_layout.setSpacing(15)
 
-        # Состояние несут три признака сразу: цветной рельс, иконка и вид
-        # полосы. Глаз ловит цвет и форму раньше, чем читает подпись, поэтому
-        # список сортируется взглядом без вчитывания в каждую карточку.
+        # Состояние несут три признака сразу: цвет рельса, иконка и вид
+        # полосы — список читается взглядом.
         self.rail = QFrame()
         self.rail.setFixedWidth(4)
         self.rail.setObjectName('StateRail')
@@ -81,10 +80,8 @@ class DownloadItemWidget(QWidget):
         self.status_label.setObjectName('StatusLabelItem')
         status_row.addWidget(self.status_label, 1)
 
-        # Выбор качества и обрезка жили только в меню по правой кнопке. По
-        # карточке в загрузчике правой кнопкой не жмёт почти никто, так что
-        # обе возможности были фактически спрятаны. Строка состояния наполовину
-        # пустая — здесь они на виду и не мешают.
+        # На виду, а не только в меню по правой кнопке: по карточке в
+        # загрузчике правой кнопкой почти никто не жмёт.
         self.quality_button = QPushButton(self.translator.translate('card_quality'))
         self.quality_button.setObjectName('CardButton')
         self.quality_button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -146,11 +143,9 @@ class DownloadItemWidget(QWidget):
         is_startable = self.task.status in (
             DownloadTask.Status.PENDING, DownloadTask.Status.ERROR, DownloadTask.Status.STOPPED)
         act_start.setEnabled(is_startable)
-        # Границы имеет смысл менять только до начала загрузки: качающееся
-        # видео уже режется по прежним меткам.
+        # Качающееся видео уже режется по прежним меткам.
         act_trim.setEnabled(is_startable)
-        # Список форматов приходит вместе со сведениями о видео;
-        # до этого выбирать не из чего.
+        # Форматы приходят вместе со сведениями о видео.
         act_format.setEnabled(is_startable and bool(self.task.formats))
 
         is_completed = self.task.status == DownloadTask.Status.COMPLETED
@@ -191,10 +186,8 @@ class DownloadItemWidget(QWidget):
         DownloadTask.Status.FETCHING_INFO: ('#5aa9ff', 'link', 'busy'),
         DownloadTask.Status.PENDING: ('#5aa9ff', 'history', 'idle'),
         DownloadTask.Status.DOWNLOADING: ('#4ecdc4', 'download', 'progress'),
-        # Обработка ведёт настоящий отсчёт: перекодирование сообщает и
-        # проценты, и остаток времени. Бегущая полоса рядом с «осталось
-        # 1 мин 20 сек» противоречила бы подписи — раз счёт известен, полоса
-        # должна его показывать.
+        # У обработки есть настоящий счёт — бегущая полоса противоречила бы
+        # подписи «осталось 1 мин 20 сек».
         DownloadTask.Status.PROCESSING: ('#4ecdc4', 'settings', 'progress'),
         DownloadTask.Status.COMPLETED: ('#40c463', 'check-circle', 'full'),
         DownloadTask.Status.ERROR: ('#ff6b6b', 'error', 'hidden'),
@@ -242,13 +235,8 @@ class DownloadItemWidget(QWidget):
         return self.translator.translate('trim_badge').format(start=start, end=end)
 
     def _subtitle(self):
-        """Строка под названием.
-
-        Раньше здесь всегда висела полная ссылка: она занимала целую строку и
-        ничего не сообщала — все ссылки с одной площадки выглядят одинаково.
-        Когда сведения о видео получены, площадка и длительность полезнее;
-        до этого показываем ссылку, потому что больше пока ничего нет.
-        """
+        """Строка под названием: площадка и длительность, пока не известны —
+        ссылка."""
         parts = []
         if self.task.platform and self.task.platform != 'Unknown':
             parts.append(self.task.platform)
@@ -265,10 +253,8 @@ class DownloadItemWidget(QWidget):
         status = self.task.status
         self._apply_state_look(status)
 
-        # Кнопки показываем только там, где они имеют смысл: настраивать
-        # качество у качающегося видео поздно, а открывать папку нечего, пока
-        # файла нет. Неактивная кнопка на виду заставляет гадать, почему она
-        # не нажимается, поэтому лишние просто убираем.
+        # Прячем, а не гасим: неактивная кнопка заставляет гадать, почему
+        # она не нажимается.
         before_start = status in (DownloadTask.Status.PENDING,
                                   DownloadTask.Status.ERROR,
                                   DownloadTask.Status.STOPPED)
