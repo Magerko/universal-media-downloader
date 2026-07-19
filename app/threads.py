@@ -3,6 +3,7 @@ import traceback
 import logging
 import glob
 import subprocess
+import shutil
 import sys
 import time
 import threading
@@ -488,6 +489,32 @@ class DownloadWorker(QRunnable):
         hours, minutes = divmod(minutes, 60)
         return f'{hours} ч {minutes:02d} мин'
 
+    # Признаки того, что YouTube упёрся именно в отсутствие движка JavaScript.
+    _JS_FAILURE_MARKERS = (
+        'signature', 'nsig', 'javascript', 'js runtime', 'jsinterp',
+        'player response', 'unable to extract',
+    )
+
+    def _explain_error(self, message):
+        """Дополняет ошибку подсказкой, если причина известна.
+
+        Голое сообщение yt-dlp вроде «Signature extraction failed» человеку
+        ничего не говорит. Раньше про Deno предупреждали при каждом запуске,
+        но такое окно закрывают не читая, а к моменту настоящей поломки о нём
+        уже не помнят. Поэтому подсказка появляется здесь — рядом с видео,
+        которое не скачалось.
+        """
+        lowered = message.lower()
+        looks_like_js = any(marker in lowered for marker in self._JS_FAILURE_MARKERS)
+        if not looks_like_js or 'youtube' not in (self.task.platform or '').lower():
+            return message
+        if shutil.which('deno'):
+            return message
+        return (f'{message}\n\n'
+                'Похоже, YouTube требует движок JavaScript. Установите Deno '
+                '(deno.com) и повторите загрузку — в PowerShell:\n'
+                'irm https://deno.land/install.ps1 | iex')
+
     def _record_final_path(self, path):
         self._final_path = path
         self.task.update_current_paths(filename=path)
@@ -646,7 +673,7 @@ class DownloadWorker(QRunnable):
             self.task.set_status(self.task.Status.STOPPED)
         except Exception as e:
             logger.error(f"DownloadWorker error for {self.task.url}: {traceback.format_exc()}")
-            self.signals.error.emit(str(e))
+            self.signals.error.emit(self._explain_error(str(e)))
         finally:
             if self.task.status != self.task.Status.COMPLETED:
                 path = self.task.save_path or self._default_save_path()

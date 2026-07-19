@@ -438,6 +438,12 @@ class SettingsTab(QWidget):
 
         if self.sender() == self.theme_combo:
             ThemeManager(self.settings).apply_theme()
+            # Тема меняется из двух мест — отсюда и из списка в боковой панели.
+            # Иконки надо пересмотреть в обоих случаях, иначе на кнопках
+            # останется набор от прежней темы и они окажутся невидимы.
+            refresh = getattr(self.parent_window, 'refresh_icons', None)
+            if refresh:
+                refresh()
 
     def update_container_hint(self):
         # У каждого варианта своя цена, и она не очевидна из названия пункта.

@@ -423,6 +423,34 @@ class MainWindow(QMainWindow):
         self.settings.setValue('theme', theme)
         self.settings.sync()
         ThemeManager(self.settings).apply_theme()
+        self.refresh_icons()
+
+    # Иконка своя на каждую тему: светлая рисуется светло-серым, тёмная —
+    # тёмно-серым. Набор выбирается при создании окна, поэтому без пересмотра
+    # после смены темы на кнопках оставались иконки от прежней: светло-серые
+    # на белом фоне попросту не видны, и кнопки снова выглядели пустыми.
+    _THEMED_ICONS = (
+        ('btn_add', 'add'), ('btn_file', 'folder'), ('btn_paste', 'link'),
+        ('btn_import', 'folder'), ('btn_quality', 'settings'),
+        ('btn_clear_recent', 'delete'), ('download_button', 'download'),
+        ('stop_button', 'stop'), ('clear_button', 'clear'),
+        ('btn_open_save', 'folder'), ('btn_open_logs', 'file'),
+    )
+
+    def refresh_icons(self):
+        theme = self.settings.value('theme', 'dark')
+        for attribute, name in self._THEMED_ICONS:
+            widget = getattr(self, attribute, None)
+            if widget is not None:
+                widget.setIcon(QIcon(paths.icon_path(name, theme)))
+
+        # Крестики на уже добавленных карточках тоже несут иконку темы.
+        close_icon = QIcon(paths.icon_path('close', theme))
+        for row in range(self.downloads_list.count()):
+            widget = self.downloads_list.itemWidget(self.downloads_list.item(row))
+            button = getattr(widget, 'remove_button', None)
+            if button is not None and not close_icon.isNull():
+                button.setIcon(close_icon)
 
     def on_add_link(self):
         url = self.url_input.text().strip()
@@ -734,11 +762,15 @@ class MainWindow(QMainWindow):
         self._rebuild_recent_buttons()
 
     def _startup_checks(self):
-        """Perform startup checks for Deno and yt-dlp updates."""
-        # Check if Deno is installed (for YouTube support)
-        if not self.update_checker.check_deno_installed():
-            self.update_checker.show_deno_warning()
+        """Проверки при запуске.
 
+        Раньше здесь показывалось модальное окно про отсутствующий Deno — на
+        каждом запуске, до того как человек успевал что-то сделать. При этом
+        YouTube без него качается, пропадают лишь отдельные форматы. Ругаться
+        заранее на проблему, которая может никогда не проявиться, — это учить
+        закрывать окно не читая. Подсказка теперь появляется в тексте ошибки
+        того видео, которое действительно не скачалось.
+        """
         # Check for yt-dlp updates (silent mode - only notify if update available)
         self.update_checker.check_for_updates(silent=True)
 
