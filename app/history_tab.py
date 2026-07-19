@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import shutil
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
@@ -10,6 +11,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QDesktopServices
 from PyQt6.QtCore import QUrl
+
+from . import paths
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,23 @@ class HistoryManager:
         os.makedirs(data_dir, exist_ok=True)
         self.history_file = os.path.join(data_dir, 'history.json')
         self._history = []
+        self._migrate_legacy_history()
         self._load()
+
+    def _migrate_legacy_history(self):
+        """Carry over history from the old location beside the code."""
+        if os.path.exists(self.history_file):
+            return
+        legacy = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'data', 'history.json')
+        if not os.path.isfile(legacy):
+            return
+        try:
+            shutil.copy2(legacy, self.history_file)
+            logger.info(f'Migrated download history from {legacy}')
+        except Exception as e:
+            logger.warning(f'Could not migrate history from {legacy}: {e}')
 
     def _load(self):
         """Load history from file."""
@@ -96,9 +115,7 @@ class HistoryTab(QWidget):
         self.parent_window = parent
 
         # Initialize history manager
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        data_dir = os.path.join(project_root, 'data')
-        self.history_manager = HistoryManager(data_dir)
+        self.history_manager = HistoryManager(paths.data_dir())
 
         self.initUI()
         self.load_history()

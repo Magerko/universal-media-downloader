@@ -1,4 +1,7 @@
-PyQt6
-requests
-yt-dlp[curl-cffi]
-packaging
+PyQt6==6.11.0
+requests==2.34.2
+packaging==26.2
+
+# Deliberately not pinned: yt-dlp ships fixes for site changes almost daily, so
+# freezing it here means downloads quietly break between our releases.
+yt-dlp[curl-cffi]>=2026.7.4

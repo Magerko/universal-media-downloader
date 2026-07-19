@@ -3,6 +3,8 @@ import json
 import logging
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from .paths import resource_path
+
 logger = logging.getLogger(__name__)
 
 
@@ -11,7 +13,9 @@ class Translator(QObject):
 
     def __init__(self, project_root=None, parent=None):
         super().__init__(parent)
-        self.project_root = project_root or os.path.dirname(os.path.abspath(__file__))
+        # project_root is kept for callers that still pass it, but resource
+        # lookup now goes through resource_path so it works in a frozen build.
+        self.project_root = project_root
         self.current_language = 'ru'
         self.translations = {}
         self.load_translations()
@@ -28,23 +32,9 @@ class Translator(QObject):
         return {}
 
     def load_translations(self):
-        candidates = [
-            os.path.join(self.project_root, 'assets', 'locales', f'{self.current_language}.json'),
-            os.path.join(self.project_root, 'assets', f'{self.current_language}.json'),
-        ]
-        data = {}
-        for p in candidates:
-            data = self._read_json(p)
-            if data:
-                break
+        data = self._read_json(resource_path('assets', f'{self.current_language}.json'))
         if not data:
-            for fp in [
-                os.path.join(self.project_root, 'assets', 'locales', 'en.json'),
-                os.path.join(self.project_root, 'assets', 'en.json'),
-            ]:
-                data = self._read_json(fp)
-                if data:
-                    break
+            data = self._read_json(resource_path('assets', 'en.json'))
         self.translations = data or {}
 
     def translate(self, key: str, fallback: str = None) -> str:

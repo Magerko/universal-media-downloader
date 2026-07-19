@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayo
 from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtGui import QFont, QDesktopServices, QPixmap
 from .translation import Translator
+from . import paths
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class AboutTab(QWidget):
         logo_box = QVBoxLayout()
         logo_box.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
         self.logo = QLabel()
-        logos_dir = os.path.join(os.path.dirname(__file__), '..', 'assets', 'logos', 'app.png')
+        logos_dir = paths.resource_path('assets', 'logos', 'app.png')
         if os.path.exists(logos_dir):
             pm = QPixmap(logos_dir)
             self.logo.setPixmap(

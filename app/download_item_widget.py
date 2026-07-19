@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QProgress
 from PyQt6.QtGui import QPixmap, QIcon, QAction
 from PyQt6.QtCore import QSize, Qt, pyqtSignal
 from .download_task import DownloadTask
+from . import paths
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ class DownloadItemWidget(QWidget):
         self.remove_button.setObjectName('RemoveButton')
         self.remove_button.setToolTip(self.translator.translate('status_stopped'))
 
-        close_icon_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'icons', 'close.svg')
+        close_icon_path = paths.resource_path('assets', 'icons', 'close.svg')
         if os.path.exists(close_icon_path):
             icon = QIcon(close_icon_path)
             if not icon.isNull():

@@ -10,6 +10,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap
 from .translation import Translator
 from .theme_manager import ThemeManager
+from . import paths
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +235,7 @@ class SettingsTab(QWidget):
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(6)
         pic = QLabel()
-        logos_dir = os.path.join(os.path.dirname(__file__), '..', 'assets', 'logos')
+        logos_dir = paths.resource_path('assets', 'logos')
         fname_map = {
             'YouTube': 'youtube.png',
             'RuTube': 'rutube.png',
@@ -243,7 +244,7 @@ class SettingsTab(QWidget):
             'VK': 'vk.png',
             'PornHub': 'pornhub.png',
             'Facebook': 'facebook.png',
-            'X (Twitter)': 'x.png',
+            'X (Twitter)': 'x_(twitter).png',
             'Kinopoisk': 'kinopoisk.png',
             'Twitch': 'twitch.png',
             'Kick': 'kick.png'
