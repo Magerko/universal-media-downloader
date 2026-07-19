@@ -177,12 +177,22 @@ QPushButton:pressed {{
     border-color: {border};
     color: {disabled_text};
 }}
-#AddUrlButton, #LoadFileButton, #SecondaryButton {{
+#SecondaryButton {{
     background-color: {raised};
     color: {text};
     border: 1px solid {border};
     border-radius: 8px;
     padding: 8px 16px;
+}}
+/* Кнопки «добавить ссылку» и «загрузить из файла» состоят из одной иконки и
+   жёстко заданы как 35x35. Отступ 8px 16px оставлял внутри один пиксель
+   ширины, иконка сжималась в точку, и кнопки выглядели пустыми. */
+#AddUrlButton, #LoadFileButton {{
+    background-color: {raised};
+    color: {text};
+    border: 1px solid {border};
+    border-radius: 8px;
+    padding: 0px;
 }}
 #AddUrlButton:hover, #LoadFileButton:hover, #SecondaryButton:hover {{
     background-color: {hover};
