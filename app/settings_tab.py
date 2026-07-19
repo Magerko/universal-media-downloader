@@ -455,14 +455,21 @@ class SettingsTab(QWidget):
             self.cookie_browser_combo.setEnabled(not is_file)
 
     def on_select_save_path(self):
-        folder = QFileDialog.getExistingDirectory(self, self.translator.translate('select_save_folder'))
+        # Начинаем с текущей папки сохранения: чаще всего её меняют на
+        # соседнюю, а не выбирают с нуля от корня диска.
+        current = self.settings.value('save_path', '', type=str)
+        folder = QFileDialog.getExistingDirectory(self, self.translator.translate('select_save_folder'),
+                                                  current if os.path.isdir(current) else '')
         if folder:
             self.save_path_lbl.setText(f'<a href="file:///{folder}">{folder}</a>')
             self.settings.setValue('save_path', folder)
             self.settings.sync()
 
     def on_select_cookies_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, self.translator.translate('select_cookies_file'), '',
+        previous = self.settings.value('cookies_path', '', type=str)
+        start = os.path.dirname(previous) if previous else ''
+        file_path, _ = QFileDialog.getOpenFileName(self, self.translator.translate('select_cookies_file'),
+                                                   start if os.path.isdir(start) else '',
                                                    'Text Files (*.txt *.cookies);;All Files (*)')
         if file_path:
             self.cookies_lbl.setText(f'<a href="file:///{file_path}">{file_path}</a>')

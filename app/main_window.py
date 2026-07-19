@@ -447,9 +447,15 @@ class MainWindow(QMainWindow):
             self._rebuild_recent_buttons()
 
     def on_load_from_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, self.translator.translate('load_from_file'), '',
+        # Диалог открывается там, где человек был в прошлый раз. Иначе список
+        # ссылок, лежащий в глубокой папке, приходится искать заново каждый
+        # раз — а берут его обычно из одного и того же места.
+        last = self.settings.value('last_import_dir', '', type=str)
+        file_path, _ = QFileDialog.getOpenFileName(self, self.translator.translate('load_from_file'),
+                                                   last if os.path.isdir(last) else '',
                                                    'Text Files (*.txt);;All Files (*)')
         if file_path:
+            self.settings.setValue('last_import_dir', os.path.dirname(file_path))
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     urls = [line.strip() for line in f if line.strip()]
@@ -480,7 +486,7 @@ class MainWindow(QMainWindow):
         self.downloads_list.setItemWidget(list_item, item_widget)
         task.list_item = list_item
         item_widget.remove_requested.connect(lambda: self.remove_download_item(task))
-        item_widget.open_folder_requested.connect(self.open_save_folder)
+        item_widget.open_folder_requested.connect(lambda t=task: self.open_task_folder(t))
         item_widget.copy_link_requested.connect(lambda: QApplication.clipboard().setText(task.url))
         item_widget.start_or_retry_requested.connect(lambda: self.download_manager.start_or_retry_task(task))
         item_widget.trim_requested.connect(lambda t=task, w=item_widget: self.on_trim_requested(t, w))
@@ -600,6 +606,40 @@ class MainWindow(QMainWindow):
         if not folder or not os.path.isdir(folder):
             folder = paths.default_download_dir()
         self._open_path(folder)
+
+    def open_task_folder(self, task):
+        """Открывает папку с готовым файлом и подсвечивает сам файл.
+
+        Раньше отсюда открывалась общая папка загрузок. При очереди из
+        десятков видео человек попадал в список файлов и искал свой глазами,
+        хотя приложение точно знает, куда его положило.
+        """
+        path = task.final_filepath
+        if path and os.path.isfile(path):
+            self._reveal_file(path)
+            return
+        # Файл могли переместить или удалить уже после загрузки — тогда
+        # показываем хотя бы папку, а не молчим.
+        folder = os.path.dirname(path) if path else ''
+        if folder and os.path.isdir(folder):
+            self._open_path(folder)
+        else:
+            self.open_save_folder()
+
+    def _reveal_file(self, path):
+        path = os.path.normpath(path)
+        try:
+            if sys.platform.startswith('win'):
+                # Кавычки обязательны: в названиях роликов постоянно есть
+                # пробелы и запятые, а explorer разбирает строку сам.
+                subprocess.Popen(f'explorer /select,"{path}"')
+            elif sys.platform == 'darwin':
+                subprocess.Popen(['open', '-R', path])
+            else:
+                self._open_path(os.path.dirname(path))
+        except Exception as e:
+            logger.warning(f'Не удалось показать файл {path}: {e}')
+            self._open_path(os.path.dirname(path))
 
     def open_logs_folder(self):
         self._open_path(paths.logs_dir())
