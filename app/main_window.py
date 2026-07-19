@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QListWidget, QListWidgetItem, QStackedWidget,
                              QToolButton, QFrame, QApplication)
 from PyQt6.QtCore import Qt, QSettings, QSize, QThreadPool, QUrl
-from PyQt6.QtGui import QFont, QIcon, QDropEvent, QMovie, QDesktopServices
+from PyQt6.QtGui import QFont, QIcon, QDropEvent, QDesktopServices
 from .settings_tab import SettingsTab
 from .about_tab import AboutTab
 from .history_tab import HistoryTab
@@ -177,12 +177,13 @@ class MainWindow(QMainWindow):
         title_row.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         self.rocket_label = QLabel()
         self.rocket_label.setObjectName('RocketEmoji')
-        rocket_gif = paths.resource_path('assets', 'animations', 'rocket.gif')
-        if os.path.exists(rocket_gif):
-            self.rocket_movie = QMovie(rocket_gif)
-            self.rocket_label.setMovie(self.rocket_movie)
-            self.rocket_label.setFixedSize(24, 24)
-            self.rocket_movie.start()
+        # Пустое состояние оформлено рисунком из дизайн-системы. Анимации нет,
+        # поэтому QMovie не нужен; при отсутствии файла остаётся эмодзи.
+        rocket_art = paths.resource_path('assets', 'animations', 'rocket.svg')
+        if os.path.exists(rocket_art):
+            self.rocket_label.setPixmap(
+                QIcon(rocket_art).pixmap(QSize(48, 48)))
+            self.rocket_label.setFixedSize(48, 48)
         else:
             self.rocket_label.setText('🚀')
         self.empty_title = QLabel(
