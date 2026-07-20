@@ -339,6 +339,47 @@ class DownloadWorker(QRunnable):
             cmd, 'Перекодирование видео',
             self._media_duration(in_path), base_pct=90, span_pct=9)
 
+    def _cut_clip(self, path):
+        """Вырезает выбранный отрезок из уже скачанного файла.
+
+        Скачивать сразу отрезок было бы логичнее, но yt-dlp в этом режиме
+        тянет видео через ffmpeg одним соединением, а YouTube его душит: на
+        проверке те же 60 секунд качались 226 секунд против трёх при обычной
+        загрузке целиком. Поэтому берём файл быстрым путём и режем у себя —
+        заодно видно проценты и остаток времени.
+        """
+        if not os.path.isfile(path):
+            return path
+        start = self.task.clip_start or 0.0
+        end = self.task.clip_end
+        base, ext = os.path.splitext(path)
+        out_path = base + '.cut' + ext
+
+        cmd = [self.ffmpeg_path, '-y', '-ss', f'{start:.3f}']
+        if end is not None:
+            cmd += ['-to', f'{end:.3f}']
+        # Перекодируем, а не копируем: копирование режет по опорным кадрам и
+        # уезжает от заданного момента на несколько секунд.
+        cmd += ['-i', path, '-map', '0', '-dn', '-ignore_unknown',
+                '-c:v', 'libx264', '-crf', '20', '-preset', 'veryfast',
+                '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out_path]
+
+        duration = (end - start) if end is not None else None
+        try:
+            self._run_ffmpeg_with_progress(
+                cmd, 'Вырезается выбранный отрезок', duration,
+                base_pct=90, span_pct=9)
+        except Exception:
+            if os.path.exists(out_path):
+                try:
+                    os.remove(out_path)
+                except Exception:
+                    pass
+            raise
+
+        os.replace(out_path, path)
+        return path
+
     def _convert_to_mp4(self, path):
         """Пережимает видео в mp4 с прогрессом. Возвращает новый путь.
 
@@ -550,6 +591,9 @@ class DownloadWorker(QRunnable):
                 'socket_timeout': 30,
                 'retries': 10,
                 'fragment_retries': 3,
+                # Видео с YouTube приходит кусками. Качая их по одному, упираемся
+                # в скорость одного соединения, а YouTube её заметно ограничивает.
+                'concurrent_fragment_downloads': 4,
                 # Каждая задача — ровно одно видео. Плейлист разворачивается
                 # в отдельные задачи заранее, и без этого ключа ссылка вида
                 # «видео из плейлиста» утянула бы весь плейлист внутрь одной
@@ -585,19 +629,6 @@ class DownloadWorker(QRunnable):
             else:
                 ydl_opts['format'] = chosen_format
                 ydl_opts['postprocessors'] = self._video_postprocessors()
-            if self.task.has_clip:
-                start, end = self.task.clip_start, self.task.clip_end
-                # yt-dlp ждёт функцию, а не пару чисел: она вызывается для
-                # каждого видео и может вернуть несколько кусков. Нам нужен
-                # один, границы которого уже выбраны человеком.
-                ydl_opts['download_ranges'] = lambda info, ydl: [{
-                    'start_time': start if start is not None else 0,
-                    'end_time': end if end is not None else (info.get('duration') or 0),
-                }]
-                # Без этого ключа рез идёт по ближайшему опорному кадру и
-                # уезжает на несколько секунд от заданного момента.
-                ydl_opts['force_keyframes_at_cuts'] = True
-
             if self.settings.value('subtitles_enabled', False, type=bool):
                 ydl_opts['writesubtitles'] = True
                 ydl_opts['subtitleslangs'] = ['en', 'ru', 'uk']
@@ -637,14 +668,7 @@ class DownloadWorker(QRunnable):
                 predicted_filepath = ydl.prepare_filename(info)
                 if self.task.is_stop_requested() or self._cancel_requested:
                     raise yt_dlp.utils.DownloadCancelled("Download stopped before start.")
-                if self.task.has_clip:
-                    # При загрузке отрезка yt-dlp не сообщает ни размера, ни
-                    # прогресса — сказать, сколько осталось, нечем. Честнее
-                    # написать, что идёт работа, чем оставить пустую полосу.
-                    self.task.update_progress(
-                        2, 'Скачивается выбранный отрезок, размер заранее неизвестен...')
-                else:
-                    self.task.update_progress(2, 'Начинается загрузка...')
+                self.task.update_progress(2, 'Начинается загрузка...')
                 ydl.download([self.task.url])
                 # Хук не срабатывает, если файл уже был скачан ранее; тогда
                 # опираемся на предсказание, как и раньше.
@@ -655,6 +679,12 @@ class DownloadWorker(QRunnable):
                         self._force_video_only(final_filepath)
                     except Exception as e:
                         logger.error(f"Strip-audio failed for {self.task.url}: {e}")
+                        raise
+                elif self.task.has_clip:
+                    try:
+                        final_filepath = self._cut_clip(final_filepath)
+                    except Exception as e:
+                        logger.error(f"Clip cut failed for {self.task.url}: {e}")
                         raise
                 elif self.settings.value('video_container_policy', 'remux', type=str) == 'convert':
                     try:
