@@ -167,7 +167,9 @@ class HistoryTab(QWidget):
 
         # Table settings
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        # Несколько строк выделяются мышью с Shift или Ctrl, действие из меню
+        # применяется сразу ко всем выделенным.
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.verticalHeader().setVisible(False)
@@ -268,37 +270,75 @@ class HistoryTab(QWidget):
             entries = self.history_manager.get_all()
         self._populate_table(entries)
 
+    def selected_entries(self):
+        """Записи всех выделенных строк, в порядке таблицы."""
+        rows = sorted({index.row() for index in self.table.selectedIndexes()})
+        entries = []
+        for row in rows:
+            item = self.table.item(row, 0)
+            if item is not None:
+                entry = item.data(Qt.ItemDataRole.UserRole)
+                if entry:
+                    entries.append(entry)
+        return entries
+
     def show_context_menu(self, position):
-        """Show context menu for table row."""
+        """Меню для выделенных строк."""
         row = self.table.rowAt(position.y())
         if row < 0:
             return
+        if not self.table.item(row, 0).isSelected():
+            self.table.selectRow(row)
 
-        item = self.table.item(row, 0)
-        entry = item.data(Qt.ItemDataRole.UserRole)
+        entries = self.selected_entries()
+        if not entries:
+            return
+        count = len(entries)
+        suffix = f' ({count})' if count > 1 else ''
 
         menu = QMenu(self)
 
-        redownload_action = QAction(self.translator.translate('redownload', 'Re-download'), self)
-        redownload_action.triggered.connect(lambda: self.redownload(entry))
+        redownload_action = QAction(
+            self.translator.translate('redownload', 'Re-download') + suffix, self)
+        redownload_action.triggered.connect(lambda: self.redownload_many(entries))
         menu.addAction(redownload_action)
 
-        copy_action = QAction(self.translator.translate('copy_link', 'Copy link'), self)
-        copy_action.triggered.connect(lambda: self.copy_link(entry))
+        copy_action = QAction(
+            self.translator.translate('copy_link', 'Copy link') + suffix, self)
+        copy_action.triggered.connect(lambda: self.copy_links(entries))
         menu.addAction(copy_action)
 
-        if entry.get('file_path') and os.path.exists(entry.get('file_path', '')):
-            open_action = QAction(self.translator.translate('open_file', 'Open file'), self)
-            open_action.triggered.connect(lambda: self.open_file(entry))
-            menu.addAction(open_action)
+        # «Открыть файл» — действие для одной записи: открывать десяток видео
+        # разом никто не просит.
+        if count == 1:
+            entry = entries[0]
+            if entry.get('file_path') and os.path.exists(entry.get('file_path', '')):
+                open_action = QAction(
+                    self.translator.translate('open_file', 'Open file'), self)
+                open_action.triggered.connect(lambda: self.open_file(entry))
+                menu.addAction(open_action)
 
         menu.addSeparator()
 
-        remove_action = QAction(self.translator.translate('remove_from_history', 'Remove from history'), self)
-        remove_action.triggered.connect(lambda: self.remove_entry(entry))
+        remove_action = QAction(
+            self.translator.translate('remove_from_history', 'Remove from history') + suffix, self)
+        remove_action.triggered.connect(lambda: self.remove_many(entries))
         menu.addAction(remove_action)
 
         menu.exec(self.table.viewport().mapToGlobal(position))
+
+    def redownload_many(self, entries):
+        for entry in entries:
+            self.redownload(entry)
+
+    def copy_links(self, entries):
+        links = [e.get('url', '') for e in entries if e.get('url')]
+        if links:
+            QApplication.clipboard().setText('\n'.join(links))
+
+    def remove_many(self, entries):
+        for entry in entries:
+            self.remove_entry(entry)
 
     def redownload(self, entry):
         """Re-download the entry."""
