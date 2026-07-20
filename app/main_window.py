@@ -8,8 +8,10 @@ from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLineEdit, QPushButton, QProgressBar, QLabel,
                              QFileDialog, QMessageBox, QComboBox,
                              QListWidget, QListWidgetItem, QStackedWidget,
-                             QToolButton, QFrame, QApplication)
-from PyQt6.QtCore import Qt, QSettings, QSize, QThreadPool, QUrl
+                             QToolButton, QFrame, QApplication,
+                             QAbstractItemView, QMenu)
+from PyQt6.QtCore import (Qt, QSettings, QSize, QThreadPool, QUrl,
+                          QItemSelectionModel)
 from PyQt6.QtGui import QFont, QIcon, QDropEvent, QDesktopServices
 from .settings_tab import SettingsTab
 from .about_tab import AboutTab
@@ -183,6 +185,12 @@ class MainWindow(QMainWindow):
         self.downloads_page_stack = QStackedWidget()
 
         self.downloads_list = QListWidget()
+        # Несколько загрузок выделяются мышью с Shift или Ctrl, а правая
+        # кнопка применяет действие сразу ко всем выделенным.
+        self.downloads_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.downloads_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.downloads_list.customContextMenuRequested.connect(self.show_downloads_menu)
         self.downloads_list.setObjectName('DownloadsList')
         self.downloads_list.setSpacing(5)
 
@@ -556,6 +564,8 @@ class MainWindow(QMainWindow):
         item_widget.open_folder_requested.connect(lambda t=task: self.open_task_folder(t))
         item_widget.copy_link_requested.connect(lambda: QApplication.clipboard().setText(task.url))
         item_widget.start_or_retry_requested.connect(lambda: self.download_manager.start_or_retry_task(task))
+        item_widget.selection_requested.connect(
+            lambda mods, t=task: self.on_item_clicked(t, mods))
         item_widget.trim_requested.connect(lambda t=task, w=item_widget: self.on_trim_requested(t, w))
         item_widget.format_requested.connect(lambda t=task, w=item_widget: self.on_format_requested(t, w))
 
@@ -577,6 +587,57 @@ class MainWindow(QMainWindow):
         task.format_override = dialog.selected_format
         task.format_label = dialog.selected_label
         widget.update_ui()
+
+    def on_item_clicked(self, task, modifiers):
+        """Выделение строки с учётом Shift и Ctrl."""
+        item = task.list_item
+        if item is None:
+            return
+        row = self.downloads_list.row(item)
+        if modifiers & Qt.KeyboardModifier.ShiftModifier and self.downloads_list.currentRow() >= 0:
+            start, end = sorted((self.downloads_list.currentRow(), row))
+            for i in range(self.downloads_list.count()):
+                self.downloads_list.item(i).setSelected(start <= i <= end)
+        elif modifiers & Qt.KeyboardModifier.ControlModifier:
+            item.setSelected(not item.isSelected())
+            self.downloads_list.setCurrentItem(item, QItemSelectionModel.SelectionFlag.NoUpdate)
+        else:
+            self.downloads_list.clearSelection()
+            item.setSelected(True)
+            self.downloads_list.setCurrentItem(item, QItemSelectionModel.SelectionFlag.NoUpdate)
+
+    def selected_tasks(self):
+        rows = {self.downloads_list.row(i) for i in self.downloads_list.selectedItems()}
+        return [t for t in self.download_manager.tasks
+                if t.list_item is not None
+                and self.downloads_list.row(t.list_item) in rows]
+
+    def show_downloads_menu(self, pos):
+        """Действия сразу над всеми выделенными загрузками."""
+        tasks = self.selected_tasks()
+        if not tasks:
+            return
+        menu = QMenu(self)
+        count = len(tasks)
+        suffix = f' ({count})' if count > 1 else ''
+        act_start = menu.addAction(self.translator.translate('download_this_video') + suffix)
+        act_stop = menu.addAction(self.translator.translate('stop') + suffix)
+        act_copy = menu.addAction(self.translator.translate('copy_link') + suffix)
+        menu.addSeparator()
+        act_remove = menu.addAction(self.translator.translate('remove_from_list') + suffix)
+
+        chosen = menu.exec(self.downloads_list.viewport().mapToGlobal(pos))
+        if chosen is act_start:
+            for task in tasks:
+                self.download_manager.start_or_retry_task(task)
+        elif chosen is act_stop:
+            for task in tasks:
+                task.request_stop()
+        elif chosen is act_copy:
+            QApplication.clipboard().setText('\n'.join(t.url for t in tasks))
+        elif chosen is act_remove:
+            for task in tasks:
+                self.remove_download_item(task)
 
     def on_trim_requested(self, task, widget):
         dialog = TrimDialog(self.translator, duration=task.duration,

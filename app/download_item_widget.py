@@ -24,6 +24,7 @@ class DownloadItemWidget(QWidget):
     start_or_retry_requested = pyqtSignal()
     trim_requested = pyqtSignal()
     format_requested = pyqtSignal()
+    selection_requested = pyqtSignal(object)
 
     def __init__(self, task: DownloadTask, translator):
         super().__init__()
@@ -123,6 +124,15 @@ class DownloadItemWidget(QWidget):
 
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.customContextMenuRequested.connect(self.show_context_menu)
+
+    def mousePressEvent(self, event):
+        """Передаёт клик списку, чтобы работало выделение с Shift и Ctrl.
+
+        Карточка закрывает собой элемент списка и забирает все нажатия себе,
+        поэтому без этого выделить несколько загрузок было нельзя.
+        """
+        self.selection_requested.emit(event.modifiers())
+        super().mousePressEvent(event)
 
     def show_context_menu(self, pos):
         menu = QMenu(self)
