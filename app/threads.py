@@ -339,6 +339,33 @@ class DownloadWorker(QRunnable):
             cmd, 'Перекодирование видео',
             self._media_duration(in_path), base_pct=90, span_pct=9)
 
+    def _download_with_retry(self, ydl, attempts: int = 3):
+        """Скачивает, переживая временный отказ YouTube.
+
+        YouTube изредка отвечает 403 на уже выданные ссылки: они живут недолго
+        и при высокой нагрузке отзываются раньше срока. Проверено на живом
+        примере — одна и та же ссылка падала с 403, а через несколько минут
+        скачивалась без единой ошибки. Ссылки берутся заново при каждой
+        попытке, поэтому повтор обычно и решает дело.
+        """
+        for attempt in range(1, attempts + 1):
+            try:
+                ydl.download([self.task.url])
+                return
+            except yt_dlp.utils.DownloadCancelled:
+                raise
+            except Exception as error:
+                text = str(error)
+                transient = '403' in text or 'Forbidden' in text or 'timed out' in text
+                if not transient or attempt == attempts:
+                    raise
+                if self.task.is_stop_requested() or self._cancel_requested:
+                    raise
+                logger.warning('Попытка %d не удалась (%s), повторяю', attempt, text[:120])
+                self.task.update_progress(
+                    2, f'Сервер отказал, повтор {attempt + 1} из {attempts}...')
+                time.sleep(3 * attempt)
+
     def _cut_clip(self, path):
         """Вырезает выбранный отрезок из уже скачанного файла.
 
@@ -669,7 +696,7 @@ class DownloadWorker(QRunnable):
                 if self.task.is_stop_requested() or self._cancel_requested:
                     raise yt_dlp.utils.DownloadCancelled("Download stopped before start.")
                 self.task.update_progress(2, 'Начинается загрузка...')
-                ydl.download([self.task.url])
+                self._download_with_retry(ydl)
                 # Хук не срабатывает, если файл уже был скачан ранее; тогда
                 # опираемся на предсказание, как и раньше.
                 final_filepath = self._final_path or predicted_filepath
