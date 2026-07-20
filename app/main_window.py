@@ -797,7 +797,12 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.download_manager.stop_all()
-        self.thread_pool.waitForDone()
+        # Ждём завершения не дольше пяти секунд. Раньше ожидание было
+        # бессрочным и выполнялось в главном потоке: пока шла медленная
+        # загрузка, окно не закрывалось вовсе, и оставался только диспетчер
+        # задач. Незавершённые загрузки всё равно остановлены строкой выше,
+        # а недокачанные куски подчистятся при следующем запуске.
+        self.thread_pool.waitForDone(5000)
         self.settings.sync()
         event.accept()
 

@@ -196,14 +196,28 @@ class DownloadWorker(QRunnable):
             self.task.update_current_paths(tmpfilename=tmp, filename=fn)
         if d['status'] == 'downloading':
             total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate')
+            speed = (d.get('_speed_str') or '').strip()
+            eta = (d.get('_eta_str') or '').strip()
             if total_bytes:
-                # Scale download to 0-90%
+                # Загрузку укладываем в 0-90%: остальное занимает обработка.
                 raw_percent = d.get('downloaded_bytes', 0) / total_bytes * 100
                 percent = int(raw_percent * 0.9)
-                speed = d.get('_speed_str', 'N/A').strip()
-                eta = d.get('_eta_str', 'N/A').strip()
-                progress_text = f"{int(raw_percent)}% | {speed} | ETA: {eta}"
-                self.task.update_progress(percent, progress_text)
+                parts = [f"{int(raw_percent)}%"]
+                if speed:
+                    parts.append(speed)
+                if eta:
+                    parts.append(f"осталось {eta}")
+                self.task.update_progress(percent, " | ".join(parts))
+            else:
+                # При обрезке по времени качается участок, и общего размера
+                # yt-dlp не знает. Раньше это условие просто не выполнялось, и
+                # полоса стояла на нуле без единой подписи — со стороны
+                # неотличимо от зависшей программы.
+                done = d.get('downloaded_bytes') or 0
+                parts = [f"Скачано {done / 1048576:.1f} МБ"]
+                if speed:
+                    parts.append(speed)
+                self.task.update_progress(self.task.progress or 1, " | ".join(parts))
         elif d['status'] == 'finished':
             self.task.set_status(self.task.Status.PROCESSING)
             self.task.update_progress(90, "Обработка файла...")
@@ -215,6 +229,8 @@ class DownloadWorker(QRunnable):
     POSTPROCESSOR_NAMES = {
         'Merger': 'Соединение видео и звука',
         'FFmpegMerger': 'Соединение видео и звука',
+        'VideoRemuxer': 'Смена контейнера',
+        'FFmpegVideoRemuxer': 'Смена контейнера',
         'VideoConvertor': 'Перекодирование видео',
         'FFmpegVideoConvertor': 'Перекодирование видео',
         'ExtractAudio': 'Извлечение звука',
@@ -610,11 +626,25 @@ class DownloadWorker(QRunnable):
             self._final_path = None
             ydl_opts['post_hooks'] = [self._record_final_path]
 
+            # Между нажатием и первым байтом проходит заметное время: сведения
+            # о видео запрашиваются по сети, а YouTube вдобавок режет скорость.
+            # Без этой строки карточка всё это время пуста, и программа
+            # выглядит зависшей.
+            self.task.update_progress(1, 'Получение сведений о видео...')
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(self.task.url, download=False)
                 predicted_filepath = ydl.prepare_filename(info)
                 if self.task.is_stop_requested() or self._cancel_requested:
                     raise yt_dlp.utils.DownloadCancelled("Download stopped before start.")
+                if self.task.has_clip:
+                    # При загрузке отрезка yt-dlp не сообщает ни размера, ни
+                    # прогресса — сказать, сколько осталось, нечем. Честнее
+                    # написать, что идёт работа, чем оставить пустую полосу.
+                    self.task.update_progress(
+                        2, 'Скачивается выбранный отрезок, размер заранее неизвестен...')
+                else:
+                    self.task.update_progress(2, 'Начинается загрузка...')
                 ydl.download([self.task.url])
                 # Хук не срабатывает, если файл уже был скачан ранее; тогда
                 # опираемся на предсказание, как и раньше.
