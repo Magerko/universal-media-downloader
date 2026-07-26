@@ -105,3 +105,6 @@ coverage.xml
 # Environment variables
 .env
 .env.local
+
+# others 
+assets/ffmpeg/bin/

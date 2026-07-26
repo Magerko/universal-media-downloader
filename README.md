@@ -68,7 +68,6 @@ winget install FFmpeg
 ```bash
 brew install ffmpeg
 ```
-
 **Linux:**
 ```bash
 sudo apt install ffmpeg  # Debian/Ubuntu
@@ -174,6 +173,30 @@ Downloader/
 **Решение:**
 1. Установите Deno (см. раздел "Требования")
 2. Перезапустите приложение
+
+### При запуске появляется ошибка `FFmpeg не найден. Убедитесь, что он находится в папке assets/ffmpeg/bin/ffmpeg`
+
+**Решение:**
+
+1. Создайте нужную папку в проекте:
+
+```bash
+mkdir -p assets/ffmpeg/bin
+```
+
+2. Скопируйте FFmpeg в эту папку:
+
+```bash
+cp $(which ffmpeg) assets/ffmpeg/bin/ffmpeg
+```
+
+3. Сделайте бинарник исполняемым:
+
+```bash
+chmod +x assets/ffmpeg/bin/ffmpeg
+```
+
+После этого приложение должно запускаться без ошибки.
 
 ## Автор
 
