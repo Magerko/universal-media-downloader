@@ -658,7 +658,7 @@ class DownloadWorker(QRunnable):
                 ydl_opts['postprocessors'] = self._video_postprocessors()
             if self.settings.value('subtitles_enabled', False, type=bool):
                 ydl_opts['writesubtitles'] = True
-                ydl_opts['subtitleslangs'] = ['en', 'ru', 'uk']
+                ydl_opts['subtitleslangs'] = ['en', 'ru', 'uk', 'fr']
             use_cookies = self.settings.value('use_cookies', False, type=bool)
             if use_cookies:
                 source_type = self.settings.value('cookie_source_type', 'file')
