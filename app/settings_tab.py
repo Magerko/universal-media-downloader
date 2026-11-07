@@ -64,7 +64,7 @@ class SettingsTab(QWidget):
                 try:
                     with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, f"{path}\\{name}.exe"):
                         return True
-                except:
+                except OSError:
                     pass
 
         common_paths = [
